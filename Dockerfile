@@ -3,7 +3,7 @@ FROM golang:1.22-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN apk add --no-cache upx
+RUN apk add --no-cache upx tzdata
 
 WORKDIR /src
 COPY go.mod ./
