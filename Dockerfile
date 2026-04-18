@@ -3,22 +3,26 @@ FROM golang:1.22-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
+RUN apk add --no-cache upx
+
 WORKDIR /src
 COPY go.mod ./
 COPY *.go ./
 COPY static/ ./static/
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o frpc-webui .
 
-FROM alpine:3.19
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o frpc-webui . \
+    && upx --best --lzma frpc-webui
 
-RUN apk add --no-cache ca-certificates tzdata
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /src/frpc-webui /app/frpc-webui
 
 WORKDIR /app
-
-COPY --from=builder /src/frpc-webui .
 
 VOLUME /app/data
 
 ENV WEB_PORT=7500
 
-ENTRYPOINT ["./frpc-webui"]
+ENTRYPOINT ["/app/frpc-webui"]
