@@ -29,14 +29,6 @@ jobs:
         with:
           buildkitd-flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
 
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
       - name: Build Docker image (AMD64)
         uses: docker/build-push-action@v5
         with:
@@ -45,8 +37,7 @@ jobs:
           push: false
           platforms: linux/amd64
           tags: frpc-webui:amd64-${{ github.event.inputs.build_version }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          no-cache: true
           outputs: type=docker,dest=/tmp/frpc-webui-amd64.tar
 
       - name: Build Docker image (ARM64)
@@ -57,15 +48,8 @@ jobs:
           push: false
           platforms: linux/arm64
           tags: frpc-webui:arm64-${{ github.event.inputs.build_version }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new-arm,mode=max
+          no-cache: true
           outputs: type=docker,dest=/tmp/frpc-webui-arm64.tar
-
-      - name: Update cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new-arm /tmp/.buildx-cache-arm
 
       - name: Verify built images
         run: |
