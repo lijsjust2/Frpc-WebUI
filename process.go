@@ -75,9 +75,9 @@ func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
-	// Open log file
+	// Open log file with sync to ensure immediate writes
 	logFile := pm.logPath(serverID)
-	lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %v", err)
 	}

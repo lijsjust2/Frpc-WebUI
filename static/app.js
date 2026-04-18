@@ -402,15 +402,20 @@ document.getElementById('btn-restart-server').addEventListener('click', async ()
 async function tryAutoRestart() {
     if (!selectedServerId) return;
     const server = servers.find(s => s.id === selectedServerId);
-    if (!server || !server.running) return;
+    if (!server) return;
 
     try {
-        await api('POST', `/servers/${selectedServerId}/restart`);
-        toast('规则已更新，自动重启成功', 'success');
+        if (server.running) {
+            await api('POST', `/servers/${selectedServerId}/restart`);
+            toast('规则已更新，自动重启成功', 'success');
+        } else {
+            await api('POST', `/servers/${selectedServerId}/start`);
+            toast('规则已更新，自动启动成功', 'success');
+        }
         await loadServers();
         renderServerDetail();
     } catch (e) {
-        toast('自动重启失败: ' + e.message, 'error');
+        toast('操作失败: ' + e.message, 'error');
     }
 }
 
