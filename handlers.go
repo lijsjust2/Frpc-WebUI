@@ -252,6 +252,15 @@ func (h *Handler) StopServer(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]string{"status": "stopped"})
 }
 
+func (h *Handler) RestartServer(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.process.Restart(id); err != nil {
+		jsonError(w, 500, err.Error())
+		return
+	}
+	jsonResponse(w, 200, map[string]string{"status": "restarted"})
+}
+
 func (h *Handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	running, pid := h.process.Status(id)

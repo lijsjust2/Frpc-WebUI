@@ -58,6 +58,7 @@ func main() {
 
 	mux.Handle("POST /api/servers/{id}/start", authMgr.Middleware(http.HandlerFunc(handler.StartServer)))
 	mux.Handle("POST /api/servers/{id}/stop", authMgr.Middleware(http.HandlerFunc(handler.StopServer)))
+	mux.Handle("POST /api/servers/{id}/restart", authMgr.Middleware(http.HandlerFunc(handler.RestartServer)))
 	mux.Handle("GET /api/servers/{id}/status", authMgr.Middleware(http.HandlerFunc(handler.ServerStatus)))
 	mux.Handle("GET /api/servers/{id}/logs", authMgr.Middleware(http.HandlerFunc(handler.ServerLogs)))
 

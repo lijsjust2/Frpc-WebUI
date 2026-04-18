@@ -325,14 +325,17 @@ document.getElementById('server-form').addEventListener('submit', async (e) => {
     try {
         if (editingServerId) {
             await api('PUT', `/servers/${editingServerId}`, data);
-            toast('服务器已更新', 'success');
+            toast('服务器已更新，正在重启...', 'success');
         } else {
             await api('POST', '/servers', data);
             toast('服务器已添加', 'success');
         }
         closeModal('modal-server');
         await loadServers();
-        if (editingServerId) selectServer(editingServerId);
+        if (editingServerId) {
+            selectServer(editingServerId);
+            tryAutoRestart();
+        }
     } catch (e) {
         toast(e.message, 'error');
     }
@@ -374,6 +377,42 @@ document.getElementById('btn-toggle-server').addEventListener('click', async () 
         toast(e.message, 'error');
     }
 });
+
+document.getElementById('btn-restart-server').addEventListener('click', async () => {
+    const server = servers.find(s => s.id === selectedServerId);
+    if (!server || !server.running) {
+        toast('服务未运行，无法重启', 'error');
+        return;
+    }
+
+    try {
+        document.getElementById('btn-restart-server').disabled = true;
+        toast('正在重启...', 'info');
+        await api('POST', `/servers/${selectedServerId}/restart`);
+        toast('已重启', 'success');
+        await loadServers();
+        renderServerDetail();
+    } catch (e) {
+        toast(e.message, 'error');
+    } finally {
+        document.getElementById('btn-restart-server').disabled = false;
+    }
+});
+
+async function tryAutoRestart() {
+    if (!selectedServerId) return;
+    const server = servers.find(s => s.id === selectedServerId);
+    if (!server || !server.running) return;
+
+    try {
+        await api('POST', `/servers/${selectedServerId}/restart`);
+        toast('规则已更新，自动重启成功', 'success');
+        await loadServers();
+        renderServerDetail();
+    } catch (e) {
+        toast('自动重启失败: ' + e.message, 'error');
+    }
+}
 
 // === Proxy CRUD ===
 document.getElementById('btn-add-proxy').addEventListener('click', () => {
@@ -425,9 +464,10 @@ async function deleteProxy(proxyId) {
     if (!confirm('确定删除此规则吗？')) return;
     try {
         await api('DELETE', `/servers/${selectedServerId}/proxies/${proxyId}`);
-        toast('规则已删除', 'success');
+        toast('规则已删除，正在重启...', 'success');
         await loadServers();
         renderServerDetail();
+        tryAutoRestart();
     } catch (e) {
         toast(e.message, 'error');
     }
@@ -457,14 +497,15 @@ document.getElementById('proxy-form').addEventListener('submit', async (e) => {
     try {
         if (editingProxyId) {
             await api('PUT', `/servers/${selectedServerId}/proxies/${editingProxyId}`, data);
-            toast('规则已更新', 'success');
+            toast('规则已更新，正在重启...', 'success');
         } else {
             await api('POST', `/servers/${selectedServerId}/proxies`, data);
-            toast('规则已添加', 'success');
+            toast('规则已添加，正在重启...', 'success');
         }
         closeModal('modal-proxy');
         await loadServers();
         renderServerDetail();
+        tryAutoRestart();
     } catch (e) {
         toast(e.message, 'error');
     }

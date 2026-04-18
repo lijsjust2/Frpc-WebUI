@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 type ProcessInfo struct {
@@ -130,6 +131,25 @@ func (pm *ProcessManager) Stop(serverID string) error {
 	info.Running = false
 	log.Printf("frpc stopped for server %s", serverID)
 	return nil
+}
+
+func (pm *ProcessManager) Restart(serverID string) error {
+	pm.mu.Lock()
+	info, ok := pm.processes[serverID]
+	if !ok || !info.Running {
+		pm.mu.Unlock()
+		return fmt.Errorf("server %s is not running", serverID)
+	}
+	tomlContent, _ := os.ReadFile(pm.confPath(serverID))
+	pm.mu.Unlock()
+
+	if err := pm.Stop(serverID); err != nil {
+		return err
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	return pm.Start(serverID, string(tomlContent))
 }
 
 func (pm *ProcessManager) Status(serverID string) (bool, int) {
