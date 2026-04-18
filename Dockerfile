@@ -6,6 +6,7 @@ ARG TARGETARCH
 WORKDIR /src
 COPY go.mod ./
 COPY *.go ./
+COPY static/ ./static/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o frpc-webui .
 
 FROM alpine:3.19
