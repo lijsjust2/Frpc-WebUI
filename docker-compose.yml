@@ -1,0 +1,12 @@
+services:
+  frpc-webui:
+    build: .
+    image: frpc-webui:latest
+    container_name: frpc-webui
+    network_mode: host
+    volumes:
+      - ./data:/app/data
+    environment:
+      - WEB_PORT=7500
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
