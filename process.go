@@ -129,6 +129,7 @@ func (pm *ProcessManager) Stop(serverID string) error {
 		return fmt.Errorf("failed to stop frpc: %v", err)
 	}
 
+	info.Cmd.Wait()
 	info.Running = false
 	log.Printf("frpc stopped for server %s", serverID)
 	return nil
@@ -147,7 +148,7 @@ func (pm *ProcessManager) Restart(serverID string, tomlContent string) error {
 		return err
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	return pm.Start(serverID, tomlContent)
 }
