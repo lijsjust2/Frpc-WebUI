@@ -222,7 +222,10 @@
                     <section class="config-section">
                         <div class="section-header">
                             <h2>运行日志</h2>
-                            <button class="btn btn-sm btn-ghost" id="btn-refresh-logs">刷新</button>
+                            <div class="section-actions">
+                                <button class="btn btn-sm btn-ghost" id="btn-view-config">查看配置</button>
+                                <button class="btn btn-sm btn-ghost" id="btn-refresh-logs">刷新</button>
+                            </div>
                         </div>
                         <pre class="log-viewer" id="log-viewer">暂无日志</pre>
                     </section>
@@ -381,6 +384,22 @@
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
                 <p id="version-status" class="text-muted">处理中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config View Modal -->
+    <div class="modal-overlay hidden" id="modal-config">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>frpc 配置文件</h3>
+                <button class="btn-close" onclick="closeModal('modal-config')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="log-viewer" id="config-viewer" style="max-height: 500px;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modal-config')">关闭</button>
             </div>
         </div>
     </div>

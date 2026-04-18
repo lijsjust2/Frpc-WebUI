@@ -287,6 +287,17 @@ func (h *Handler) ServerLogs(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]string{"logs": logs})
 }
 
+func (h *Handler) ServerConfig(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	server, err := h.config.GetServer(id)
+	if err != nil {
+		jsonError(w, 404, err.Error())
+		return
+	}
+	toml := h.config.GenerateToml(server)
+	jsonResponse(w, 200, map[string]string{"config": toml})
+}
+
 // --- FRPC Version ---
 
 func (h *Handler) FrpcVersion(w http.ResponseWriter, r *http.Request) {

@@ -61,6 +61,7 @@ func main() {
 	mux.Handle("POST /api/servers/{id}/restart", authMgr.Middleware(http.HandlerFunc(handler.RestartServer)))
 	mux.Handle("GET /api/servers/{id}/status", authMgr.Middleware(http.HandlerFunc(handler.ServerStatus)))
 	mux.Handle("GET /api/servers/{id}/logs", authMgr.Middleware(http.HandlerFunc(handler.ServerLogs)))
+	mux.Handle("GET /api/servers/{id}/config", authMgr.Middleware(http.HandlerFunc(handler.ServerConfig)))
 
 	mux.Handle("GET /api/frpc/version", authMgr.Middleware(http.HandlerFunc(handler.FrpcVersion)))
 	mux.Handle("GET /api/frpc/latest", authMgr.Middleware(http.HandlerFunc(handler.FrpcLatest)))

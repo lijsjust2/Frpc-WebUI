@@ -531,6 +531,17 @@ async function refreshLogs() {
     }
 }
 
+document.getElementById('btn-view-config').addEventListener('click', async () => {
+    if (!selectedServerId) return;
+    try {
+        const data = await api('GET', `/servers/${selectedServerId}/config`);
+        document.getElementById('config-viewer').textContent = data.config || '暂无配置';
+        openModal('modal-config');
+    } catch (e) {
+        toast('获取配置失败: ' + e.message, 'error');
+    }
+});
+
 // === FRPC Version ===
 async function checkFrpcVersion() {
     try {
