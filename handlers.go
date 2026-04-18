@@ -254,7 +254,14 @@ func (h *Handler) StopServer(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RestartServer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := h.process.Restart(id); err != nil {
+	server, err := h.config.GetServer(id)
+	if err != nil {
+		jsonError(w, 404, err.Error())
+		return
+	}
+
+	toml := h.config.GenerateToml(server)
+	if err := h.process.Restart(id, toml); err != nil {
 		jsonError(w, 500, err.Error())
 		return
 	}

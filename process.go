@@ -134,14 +134,13 @@ func (pm *ProcessManager) Stop(serverID string) error {
 	return nil
 }
 
-func (pm *ProcessManager) Restart(serverID string) error {
+func (pm *ProcessManager) Restart(serverID string, tomlContent string) error {
 	pm.mu.Lock()
 	info, ok := pm.processes[serverID]
 	if !ok || !info.Running {
 		pm.mu.Unlock()
 		return fmt.Errorf("server %s is not running", serverID)
 	}
-	tomlContent, _ := os.ReadFile(pm.confPath(serverID))
 	pm.mu.Unlock()
 
 	if err := pm.Stop(serverID); err != nil {
@@ -150,7 +149,7 @@ func (pm *ProcessManager) Restart(serverID string) error {
 
 	time.Sleep(200 * time.Millisecond)
 
-	return pm.Start(serverID, string(tomlContent))
+	return pm.Start(serverID, tomlContent)
 }
 
 func (pm *ProcessManager) Status(serverID string) (bool, int) {
