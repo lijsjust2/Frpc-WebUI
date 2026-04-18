@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -179,6 +180,12 @@ func (pm *ProcessManager) GetLogs(serverID string, lines int) (string, error) {
 	}
 
 	content := string(b)
+	
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	content = ansiRegex.ReplaceAllString(content, "")
+
+	content = strings.TrimSpace(content)
+	
 	if lines > 0 {
 		allLines := strings.Split(content, "\n")
 		if len(allLines) > lines {

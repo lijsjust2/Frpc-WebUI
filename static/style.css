@@ -676,15 +676,29 @@ body {
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 12px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    padding: 16px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.8;
     color: var(--text-secondary);
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
+    white-space: pre;
+    word-break: break-word;
+}
+
+.log-viewer::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log-viewer::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.log-viewer::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 4px;
 }
 
 /* === Modals === */
