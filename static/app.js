@@ -140,6 +140,36 @@ async function enterApp() {
     }
 }
 
+// === Change Password ===
+document.getElementById('btn-change-password').addEventListener('click', () => {
+    document.getElementById('password-form').reset();
+    document.getElementById('password-error').classList.add('hidden');
+    openModal('modal-password');
+});
+
+document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const oldPassword = document.getElementById('old-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const errorEl = document.getElementById('password-error');
+
+    if (newPassword !== confirmPassword) {
+        errorEl.textContent = '两次输入的新密码不一致';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        await api('POST', '/auth/change-password', { oldPassword, newPassword });
+        closeModal('modal-password');
+        toast('密码修改成功', 'success');
+    } catch (e) {
+        errorEl.textContent = e.message;
+        errorEl.classList.remove('hidden');
+    }
+});
+
 // === Logout ===
 document.getElementById('btn-logout').addEventListener('click', () => {
     authToken = '';

@@ -80,6 +80,32 @@ func (am *AuthManager) Verify(password string) bool {
 	return hashPassword(password, data.Salt) == data.PasswordHash
 }
 
+func (am *AuthManager) ChangePassword(oldPassword, newPassword string) error {
+	if !am.Verify(oldPassword) {
+		return fmt.Errorf("invalid old password")
+	}
+
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return err
+	}
+
+	saltHex := hex.EncodeToString(salt)
+	hash := hashPassword(newPassword, saltHex)
+
+	data := AuthData{
+		PasswordHash: hash,
+		Salt:         saltHex,
+	}
+
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(am.authFilePath(), b, 0600)
+}
+
 func (am *AuthManager) CreateSession() string {
 	token := make([]byte, 32)
 	rand.Read(token)

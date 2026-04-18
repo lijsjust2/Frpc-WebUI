@@ -46,6 +46,7 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", handler.AuthLogin)
 
 	// Protected API routes
+	mux.Handle("POST /api/auth/change-password", authMgr.Middleware(http.HandlerFunc(handler.AuthChangePassword)))
 	mux.Handle("GET /api/servers", authMgr.Middleware(http.HandlerFunc(handler.ListServers)))
 	mux.Handle("POST /api/servers", authMgr.Middleware(http.HandlerFunc(handler.CreateServer)))
 	mux.Handle("PUT /api/servers/{id}", authMgr.Middleware(http.HandlerFunc(handler.UpdateServer)))

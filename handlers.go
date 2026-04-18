@@ -86,6 +86,32 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]string{"token": token})
 }
 
+func (h *Handler) AuthChangePassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, 400, "invalid request body")
+		return
+	}
+	if body.OldPassword == "" || body.NewPassword == "" {
+		jsonError(w, 400, "old and new password are required")
+		return
+	}
+	if len(body.NewPassword) < 6 {
+		jsonError(w, 400, "new password must be at least 6 characters")
+		return
+	}
+
+	if err := h.auth.ChangePassword(body.OldPassword, body.NewPassword); err != nil {
+		jsonError(w, 400, err.Error())
+		return
+	}
+
+	jsonResponse(w, 200, map[string]string{"status": "password changed"})
+}
+
 // --- Servers ---
 
 func (h *Handler) ListServers(w http.ResponseWriter, r *http.Request) {
