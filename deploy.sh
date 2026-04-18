@@ -1,11 +1,11 @@
 #!/bin/bash
-# FRP WebUI 管理器 - Docker 部署脚本
+# Frpc WebUI 管理器 - Docker 部署脚本
 # 用法: 将此脚本和 docker-compose.yml 放在同一目录下执行
 
 set -e
 
 echo "============================================"
-echo "  FRP WebUI 管理器 - Docker 部署"
+echo "  Frpc WebUI 管理器 - Docker 部署"
 echo "============================================"
 echo ""
 

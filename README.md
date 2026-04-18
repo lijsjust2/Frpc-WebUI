@@ -1,18 +1,18 @@
-# FRP WebUI
+# Frpc WebUI
 
 一个轻量级的 FRP 客户端 Web 管理界面，通过 Docker 部署，让你无需编辑配置文件即可管理 frpc。
 
-## 为什么选择 FRP WebUI？
+## 为什么选择 Frpc WebUI？
 
 | 特性 | 说明 |
 |------|------|
-| � **Docker 部署** | 一键部署，支持 AMD64 / ARM64 架构 |
-| �🖥️ **Web 界面** | 图形化配置，告别手动编辑配置文件 |
-| � **frpc 管理** | 支持在线下载或本地上传 frpc 二进制 |
+| 🐳 **Docker 部署** | 一键部署，支持 AMD64 / ARM64 架构 |
+| 🖥️ **Web 界面** | 图形化配置，告别手动编辑配置文件 |
+| 📦 **frpc 管理** | 支持在线下载或本地上传 frpc 二进制 |
 | 📡 **多服务器** | 同时管理多个 frps 服务器 |
 | 🔄 **多协议** | 支持 TCP / UDP / HTTP / HTTPS 代理 |
-| � **安全** | 密码保护，数据本地存储 |
-| � **轻量** | 镜像仅 ~30MB |
+| 🔒 **安全** | 密码保护，数据本地存储 |
+| 💾 **轻量** | 镜像仅 ~5-8MB |
 
 ## 快速开始
 
@@ -26,7 +26,7 @@ docker run -d \
   -e WEB_PORT=7500 \
   -e TZ=Asia/Shanghai \
   --restart unless-stopped \
-  ghcr.io/zhensjoke/frpc-webui:latest
+  frpc-webui:latest
 ```
 
 ### 访问界面
@@ -102,23 +102,20 @@ data/
 
 ```bash
 # 查看日志
-docker compose logs -f
+docker logs -f frpc-webui
 
 # 重启服务
-docker compose restart
-
-# 更新镜像
-docker compose pull && docker compose up -d
+docker restart frpc-webui
 
 # 停止服务
-docker compose down
+docker stop frpc-webui
 ```
 
 ## 从源码构建
 
 ```bash
-git clone https://github.com/ZhensJoke/frpc-webui.git
-cd frpc-webui
+git clone https://github.com/lijsjust2/Frpc-WebUI.git
+cd frp-web
 
 docker build -t frpc-webui .
 ```
@@ -127,8 +124,8 @@ docker build -t frpc-webui .
 
 - **后端**：Go（静态资源内嵌，零外部依赖）
 - **前端**：原生 HTML/CSS/JS（无框架）
-- **基础镜像**：Alpine Linux
-- **镜像大小**：~30MB
+- **基础镜像**：scratch（空镜像）
+- **镜像大小**：~5-8MB
 
 ## License
 
