@@ -170,18 +170,7 @@ document.getElementById('btn-view-logs').addEventListener('click', () => {
     startLogsRefresh();
 });
 
-// Update header button states when selecting/deselecting server
-function updateHeaderButtons() {
-    const configBtn = document.getElementById('btn-view-config');
-    const logsBtn = document.getElementById('btn-view-logs');
-    if (selectedServerId) {
-        configBtn.disabled = false;
-        logsBtn.disabled = false;
-    } else {
-        configBtn.disabled = true;
-        logsBtn.disabled = true;
-    }
-}
+// === Change Password ===
 document.getElementById('btn-change-password').addEventListener('click', () => {
     document.getElementById('password-form').reset();
     document.getElementById('password-error').classList.add('hidden');
@@ -254,7 +243,6 @@ function selectServer(id) {
     selectedServerId = id;
     renderServerList();
     renderServerDetail();
-    updateHeaderButtons();
 }
 
 function renderServerDetail() {

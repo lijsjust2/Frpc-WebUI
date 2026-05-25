@@ -90,20 +90,6 @@
                     </button>
                 </div>
                 <div class="header-divider"></div>
-                <button class="btn btn-sm btn-ghost" id="btn-view-config" title="查看配置" disabled>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                </button>
-                <button class="btn btn-sm btn-ghost" id="btn-view-logs" title="运行日志" disabled>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                </button>
                 <button class="btn btn-sm btn-ghost" id="btn-change-password" title="修改密码">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -156,7 +142,25 @@
                     <!-- Server Config Section -->
                     <section class="config-section">
                         <div class="section-header">
-                            <h2 id="server-detail-name">服务器配置</h2>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <h2 id="server-detail-name">服务器配置</h2>
+                                <button class="btn btn-sm btn-ghost" id="btn-view-config" title="查看配置">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                    配置
+                                </button>
+                                <button class="btn btn-sm btn-ghost" id="btn-view-logs" title="运行日志">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                    日志
+                                </button>
+                            </div>
                             <div class="section-actions">
                                 <button class="btn btn-sm" id="btn-restart-server" title="重启">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
