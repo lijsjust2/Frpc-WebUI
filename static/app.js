@@ -4,6 +4,8 @@ let servers = [];
 let selectedServerId = null;
 let editingServerId = null;
 let editingProxyId = null;
+let proxySortColumn = '';
+let proxySortDirection = 'asc';
 
 // === API Helper ===
 async function api(method, path, body = null) {
@@ -306,6 +308,73 @@ function renderServerDetail() {
 }
 
 // === Proxy Table ===
+function sortProxies(proxies) {
+    if (!proxySortColumn) return proxies;
+    const sorted = [...proxies];
+    sorted.sort((a, b) => {
+        let valA = '', valB = '';
+        switch (proxySortColumn) {
+            case 'name':
+                valA = (a.name || '').toLowerCase();
+                valB = (b.name || '').toLowerCase();
+                break;
+            case 'type':
+                valA = (a.type || '').toLowerCase();
+                valB = (b.type || '').toLowerCase();
+                break;
+            case 'localAddr':
+                valA = `${a.localIP || '127.0.0.1'}:${a.localPort}`;
+                valB = `${b.localIP || '127.0.0.1'}:${b.localPort}`;
+                break;
+            case 'remote':
+                if (a.type === 'tcp' || a.type === 'udp') {
+                    valA = String(a.remotePort || '');
+                } else {
+                    valA = (a.customDomains || []).join(',') + (a.subdomain || '');
+                }
+                if (b.type === 'tcp' || b.type === 'udp') {
+                    valB = String(b.remotePort || '');
+                } else {
+                    valB = (b.customDomains || []).join(',') + (b.subdomain || '');
+                }
+                break;
+            case 'remark':
+                valA = (a.remark || '').toLowerCase();
+                valB = (b.remark || '').toLowerCase();
+                break;
+        }
+        if (valA < valB) return proxySortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return proxySortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+    return sorted;
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('.proxy-table th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === proxySortColumn) {
+            th.classList.add(proxySortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
+}
+
+// Sort click handlers
+document.querySelectorAll('.proxy-table th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.sort;
+        if (proxySortColumn === col) {
+            proxySortDirection = proxySortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            proxySortColumn = col;
+            proxySortDirection = 'asc';
+        }
+        updateSortIndicators();
+        const server = servers.find(s => s.id === selectedServerId);
+        if (server) renderProxyTable(server.proxies || []);
+    });
+});
+
 function renderProxyTable(proxies) {
     const tbody = document.getElementById('proxy-table-body');
     const emptyEl = document.getElementById('proxy-empty');
@@ -320,7 +389,9 @@ function renderProxyTable(proxies) {
     tableEl.classList.remove('hidden');
     emptyEl.classList.add('hidden');
 
-    tbody.innerHTML = proxies.map(p => {
+    const sorted = sortProxies(proxies);
+
+    tbody.innerHTML = sorted.map(p => {
         let remote = '';
         if (p.type === 'tcp' || p.type === 'udp') {
             remote = p.remotePort ? `:${p.remotePort}` : '-';
@@ -331,6 +402,14 @@ function renderProxyTable(proxies) {
             remote = parts.join('; ') || '-';
         }
 
+        const isEnabled = p.enabled === undefined || p.enabled === null || p.enabled === true;
+        const statusHtml = isEnabled
+            ? '<span class="status-enabled">启用</span>'
+            : '<span class="status-disabled">禁用</span>';
+        const toggleBtnHtml = isEnabled
+            ? `<button class="btn btn-sm btn-ghost" onclick="toggleProxy('${p.id}')" title="禁用">禁用</button>`
+            : `<button class="btn btn-sm btn-ghost" onclick="toggleProxy('${p.id}')" title="启用" style="color:var(--success)">启用</button>`;
+
         return `
             <tr>
                 <td>${escapeHtml(p.name)}</td>
@@ -338,7 +417,9 @@ function renderProxyTable(proxies) {
                 <td>${escapeHtml(p.localIP || '127.0.0.1')}:${p.localPort}</td>
                 <td>${escapeHtml(remote)}</td>
                 <td>${escapeHtml(p.remark || '')}</td>
+                <td>${statusHtml}</td>
                 <td>
+                    ${toggleBtnHtml}
                     <button class="btn btn-sm btn-ghost" onclick="editProxy('${p.id}')" title="编辑">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
@@ -349,6 +430,17 @@ function renderProxyTable(proxies) {
             </tr>
         `;
     }).join('');
+}
+
+async function toggleProxy(proxyId) {
+    try {
+        await api('POST', `/servers/${selectedServerId}/proxies/${proxyId}/toggle`);
+        await loadServers();
+        renderServerDetail();
+        tryAutoRestart();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 // === Server CRUD ===
@@ -496,6 +588,8 @@ document.getElementById('btn-add-proxy').addEventListener('click', () => {
     document.getElementById('proxy-form').reset();
     document.getElementById('pf-local-ip').value = '127.0.0.1';
     document.getElementById('pf-type').value = 'tcp';
+    document.getElementById('pf-encryption').checked = true;
+    document.getElementById('pf-compression').checked = true;
     document.getElementById('pf-bandwidth-mode').value = 'client';
     toggleProxyFields();
     openModal('modal-proxy');
@@ -779,6 +873,57 @@ document.getElementById('btn-theme-toggle').addEventListener('click', () => {
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     if (!localStorage.getItem('theme')) {
         applyTheme(e.matches ? 'dark' : 'light');
+    }
+});
+
+// === Export Config ===
+document.getElementById('btn-export-config').addEventListener('click', async () => {
+    try {
+        const data = await api('GET', '/export');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `frpc-webui-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('配置已导出', 'success');
+    } catch (e) {
+        toast('导出失败: ' + e.message, 'error');
+    }
+});
+
+// === Import Config ===
+document.getElementById('btn-import-config').addEventListener('click', () => {
+    document.getElementById('import-file-input').click();
+});
+
+document.getElementById('import-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm('导入配置将覆盖当前所有服务器配置，确定继续吗？')) {
+        e.target.value = '';
+        return;
+    }
+
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!Array.isArray(data)) {
+            toast('无效的配置文件格式', 'error');
+            return;
+        }
+        await api('POST', '/import', data);
+        toast('配置已导入，正在刷新...', 'success');
+        selectedServerId = null;
+        await loadServers();
+        document.getElementById('no-selection').classList.remove('hidden');
+        document.getElementById('server-detail').classList.add('hidden');
+    } catch (err) {
+        toast('导入失败: ' + (err.message || '文件格式错误'), 'error');
+    } finally {
+        e.target.value = '';
     }
 });
 
