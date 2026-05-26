@@ -635,6 +635,8 @@ function editProxy(proxyId) {
     document.getElementById('pf-bandwidth').value = proxy.bandwidthLimit || '';
     document.getElementById('pf-bandwidth-mode').value = proxy.bandwidthLimitMode || 'client';
     document.getElementById('pf-remark').value = proxy.remark || '';
+    const isEnabled = proxy.enabled === undefined || proxy.enabled === null || proxy.enabled === true;
+    document.getElementById('pf-enabled').checked = isEnabled;
     toggleProxyFields();
     openModal('modal-proxy');
 }
@@ -686,6 +688,7 @@ document.getElementById('proxy-form').addEventListener('submit', async (e) => {
         bandwidthLimit: document.getElementById('pf-bandwidth').value.trim(),
         bandwidthLimitMode: document.getElementById('pf-bandwidth-mode').value,
         remark: document.getElementById('pf-remark').value.trim(),
+        enabled: document.getElementById('pf-enabled').checked,
     };
 
     if (type === 'tcp' || type === 'udp') {
