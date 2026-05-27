@@ -129,7 +129,7 @@ func (pm *ProcessManager) Stop(serverID string) error {
 	info, ok := pm.processes[serverID]
 	if !ok || !info.Running {
 		pm.mu.Unlock()
-		return fmt.Errorf("server %s is not running", serverID)
+		return nil // Already stopped, not an error
 	}
 
 	if err := info.Cmd.Process.Kill(); err != nil {

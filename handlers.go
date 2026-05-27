@@ -193,6 +193,11 @@ func (h *Handler) UpdateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cfg.Name == "" || cfg.ServerAddr == "" || cfg.ServerPort == 0 {
+		jsonError(w, 400, "name, serverAddr, and serverPort are required")
+		return
+	}
+
 	if err := h.config.UpdateServer(id, cfg); err != nil {
 		jsonError(w, 500, err.Error())
 		return
@@ -238,6 +243,11 @@ func (h *Handler) CreateProxy(w http.ResponseWriter, r *http.Request) {
 	if proxy.Name == "" || proxy.Type == "" {
 		jsonError(w, 400, "name and type are required")
 		return
+	}
+
+	// Default localIP
+	if proxy.LocalIP == "" {
+		proxy.LocalIP = "127.0.0.1"
 	}
 
 	// Validate local port
@@ -286,6 +296,11 @@ func (h *Handler) UpdateProxy(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&proxy); err != nil {
 		jsonError(w, 400, "invalid request body")
 		return
+	}
+
+	// Default localIP
+	if proxy.LocalIP == "" {
+		proxy.LocalIP = "127.0.0.1"
 	}
 
 	// Validate local port

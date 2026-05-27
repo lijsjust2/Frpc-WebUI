@@ -8,7 +8,7 @@ let proxySortColumn = '';
 let proxySortDirection = 'asc';
 
 // === API Helper ===
-async function api(method, path, body = null) {
+async function api(method, path, body = null, skipAuthRedirect = false) {
     const opts = {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -27,7 +27,9 @@ async function api(method, path, body = null) {
         localStorage.removeItem('authToken');
         selectedServerId = null;
         showPage('login-page');
-        toast('登录已过期，请重新登录', 'error');
+        if (!skipAuthRedirect) {
+            toast('登录已过期，请重新登录', 'error');
+        }
         throw new Error('unauthorized');
     }
 
@@ -55,12 +57,26 @@ function setButtonLoading(buttonId, loading) {
     
     if (loading) {
         btn.disabled = true;
-        btn.dataset.originalText = btn.textContent;
-        btn.textContent = '处理中...';
+        btn.dataset.originalHtml = btn.innerHTML;
+        // Keep only the text span content, replace with loading text
+        const textSpan = btn.querySelector('span') || btn;
+        if (textSpan === btn) {
+            btn.dataset.originalHtml = btn.innerHTML;
+            btn.textContent = '处理中...';
+        } else {
+            btn.dataset.originalText = textSpan.textContent;
+            textSpan.textContent = '处理中...';
+        }
     } else {
         btn.disabled = false;
+        if (btn.dataset.originalHtml) {
+            btn.innerHTML = btn.dataset.originalHtml;
+            delete btn.dataset.originalHtml;
+        }
         if (btn.dataset.originalText) {
-            btn.textContent = btn.dataset.originalText;
+            const textSpan = btn.querySelector('span');
+            if (textSpan) textSpan.textContent = btn.dataset.originalText;
+            delete btn.dataset.originalText;
         }
     }
 }
@@ -94,11 +110,11 @@ async function init() {
         if (savedToken) {
             authToken = savedToken;
             try {
-                await api('GET', '/servers');
+                await api('GET', '/servers', null, true);
                 enterApp();
                 return;
             } catch (e) {
-                // Token expired or invalid
+                // Token expired or invalid, silently clear
                 authToken = '';
                 localStorage.removeItem('authToken');
             }
@@ -830,9 +846,13 @@ function escapeHtml(str) {
 // === Auto refresh ===
 setInterval(async () => {
     if (authToken && document.getElementById('main-page').classList.contains('hidden') === false) {
-        await loadServers();
-        if (selectedServerId) {
-            renderServerDetail();
+        try {
+            await loadServers();
+            if (selectedServerId) {
+                renderServerDetail();
+            }
+        } catch (e) {
+            // Token expired - api() already handles redirect, stop retrying silently
         }
     }
 }, 10000);
