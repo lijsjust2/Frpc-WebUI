@@ -20,6 +20,17 @@ async function api(method, path, body = null) {
         opts.body = JSON.stringify(body);
     }
     const res = await fetch(`/api${path}`, opts);
+
+    // Handle 401 - token expired, redirect to login
+    if (res.status === 401) {
+        authToken = '';
+        localStorage.removeItem('authToken');
+        selectedServerId = null;
+        showPage('login-page');
+        toast('登录已过期，请重新登录', 'error');
+        throw new Error('unauthorized');
+    }
+
     const data = await res.json();
     if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
