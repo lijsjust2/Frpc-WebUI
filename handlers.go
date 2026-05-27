@@ -420,3 +420,64 @@ func (h *Handler) ClearServerLogs(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, 200, map[string]string{"status": "cleared"})
 }
 
+// --- Proxy Toggle ---
+
+func (h *Handler) ToggleProxy(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	pid := r.PathValue("pid")
+
+	if err := h.config.ToggleProxy(id, pid); err != nil {
+		jsonError(w, 500, err.Error())
+		return
+	}
+
+	jsonResponse(w, 200, map[string]string{"status": "toggled"})
+}
+
+// --- Export/Import Config ---
+
+func (h *Handler) ExportConfig(w http.ResponseWriter, r *http.Request) {
+	servers, err := h.config.ExportAll()
+	if err != nil {
+		jsonError(w, 500, err.Error())
+		return
+	}
+
+	b, err := json.MarshalIndent(servers, "", "  ")
+	if err != nil {
+		jsonError(w, 500, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=frpc-webui-backup.json")
+	w.WriteHeader(200)
+	w.Write(b)
+}
+
+func (h *Handler) ImportConfig(w http.ResponseWriter, r *http.Request) {
+	var servers []ServerConfig
+	if err := json.NewDecoder(r.Body).Decode(&servers); err != nil {
+		jsonError(w, 400, "invalid config data")
+		return
+	}
+
+	if len(servers) == 0 {
+		jsonError(w, 400, "no servers in imported config")
+		return
+	}
+
+	// Stop all running servers first
+	currentServers, _ := h.config.Load()
+	for _, s := range currentServers {
+		h.process.Stop(s.ID)
+	}
+
+	if err := h.config.ImportAll(servers); err != nil {
+		jsonError(w, 500, err.Error())
+		return
+	}
+
+	jsonResponse(w, 200, map[string]string{"status": "imported"})
+}
+

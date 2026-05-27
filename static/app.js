@@ -893,8 +893,26 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 // === Export Config ===
 document.getElementById('btn-export-config').addEventListener('click', async () => {
     try {
-        const data = await api('GET', '/export');
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const res = await fetch('/api/export', {
+            headers: { 'X-Auth-Token': authToken }
+        });
+
+        if (res.status === 401) {
+            authToken = '';
+            localStorage.removeItem('authToken');
+            selectedServerId = null;
+            showPage('login-page');
+            toast('登录已过期，请重新登录', 'error');
+            return;
+        }
+
+        if (!res.ok) {
+            try { const d = await res.json(); toast('导出失败: ' + d.error, 'error'); }
+            catch { toast('导出失败', 'error'); }
+            return;
+        }
+
+        const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
