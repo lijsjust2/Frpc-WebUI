@@ -58,6 +58,17 @@ func main() {
 	// Setup routes
 	mux := http.NewServeMux()
 
+	// Request logging middleware wrapper
+	loggedMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+		mux.ServeHTTP(w, r)
+	})
+
+	// Health check (no auth)
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, map[string]string{"status": "ok", "version": "v1.2.0"})
+	})
+
 	// Auth routes (no auth middleware)
 	mux.HandleFunc("GET /api/auth/status", handler.AuthStatus)
 	mux.HandleFunc("POST /api/auth/setup", handler.AuthSetup)
@@ -113,7 +124,7 @@ func main() {
 
 	log.Printf("frpc-webui starting on port %s", port)
 	log.Printf("Data directory: %s", dataDir)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), mux); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), loggedMux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
