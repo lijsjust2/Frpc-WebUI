@@ -553,6 +553,36 @@ body {
     border-bottom: 1px solid var(--border);
 }
 
+.proxy-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.proxy-table th.sortable:hover {
+    color: var(--accent-hover);
+}
+
+.proxy-table th.sortable .sort-icon {
+    font-size: 10px;
+    margin-left: 2px;
+    opacity: 0.4;
+}
+
+.proxy-table th.sortable.sort-asc .sort-icon::after {
+    content: ' ▲';
+    opacity: 1;
+}
+
+.proxy-table th.sortable.sort-desc .sort-icon::after {
+    content: ' ▼';
+    opacity: 1;
+}
+
+.proxy-table th.sortable.sort-asc,
+.proxy-table th.sortable.sort-desc {
+    color: var(--accent-hover);
+}
+
 .proxy-table td {
     padding: 10px 12px;
     font-size: 13px;
@@ -591,6 +621,26 @@ body {
 .type-https {
     background: rgba(245, 158, 11, 0.15);
     color: #fbbf24;
+}
+
+.status-enabled {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
+}
+
+.status-disabled {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-muted);
 }
 
 /* === Log Viewer === */

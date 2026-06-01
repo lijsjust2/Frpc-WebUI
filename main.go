@@ -74,6 +74,10 @@ func main() {
 	mux.Handle("POST /api/servers/{id}/proxies", authMgr.Middleware(http.HandlerFunc(handler.CreateProxy)))
 	mux.Handle("PUT /api/servers/{id}/proxies/{pid}", authMgr.Middleware(http.HandlerFunc(handler.UpdateProxy)))
 	mux.Handle("DELETE /api/servers/{id}/proxies/{pid}", authMgr.Middleware(http.HandlerFunc(handler.DeleteProxy)))
+	mux.Handle("POST /api/servers/{id}/proxies/{pid}/toggle", authMgr.Middleware(http.HandlerFunc(handler.ToggleProxy)))
+
+	mux.Handle("GET /api/export", authMgr.Middleware(http.HandlerFunc(handler.ExportConfig)))
+	mux.Handle("POST /api/import", authMgr.Middleware(http.HandlerFunc(handler.ImportConfig)))
 
 	mux.Handle("POST /api/servers/{id}/start", authMgr.Middleware(http.HandlerFunc(handler.StartServer)))
 	mux.Handle("POST /api/servers/{id}/stop", authMgr.Middleware(http.HandlerFunc(handler.StopServer)))

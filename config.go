@@ -43,6 +43,7 @@ type ProxyConfig struct {
 	HTTPUser         string   `json:"httpUser,omitempty"`
 	HTTPPassword     string   `json:"httpPassword,omitempty"`
 	Remark           string   `json:"remark,omitempty"`
+	Enabled          *bool    `json:"enabled,omitempty"` // nil or true = enabled, false = disabled
 }
 
 type ConfigManager struct {
@@ -217,6 +218,52 @@ func (cm *ConfigManager) DeleteProxy(serverID, proxyID string) error {
 	return fmt.Errorf("server not found: %s", serverID)
 }
 
+func (cm *ConfigManager) ToggleProxy(serverID, proxyID string) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == serverID {
+			for j := range servers[i].Proxies {
+				if servers[i].Proxies[j].ID == proxyID {
+					if servers[i].Proxies[j].Enabled == nil || *servers[i].Proxies[j].Enabled {
+						servers[i].Proxies[j].Enabled = boolPtr(false)
+					} else {
+						servers[i].Proxies[j].Enabled = boolPtr(true)
+					}
+					servers[i].UpdatedAt = time.Now().Format(time.RFC3339)
+					return cm.Save(servers)
+				}
+			}
+			return fmt.Errorf("proxy not found: %s", proxyID)
+		}
+	}
+	return fmt.Errorf("server not found: %s", serverID)
+}
+
+func (cm *ConfigManager) ExportAll() ([]ServerConfig, error) {
+	return cm.Load()
+}
+
+func (cm *ConfigManager) ImportAll(servers []ServerConfig) error {
+	// Regenerate IDs to avoid conflicts
+	for i := range servers {
+		servers[i].ID = generateID()
+		servers[i].CreatedAt = time.Now().Format(time.RFC3339)
+		servers[i].UpdatedAt = servers[i].CreatedAt
+		for j := range servers[i].Proxies {
+			servers[i].Proxies[j].ID = generateID()
+		}
+	}
+	return cm.Save(servers)
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // GenerateToml generates frpc.toml content for a server
 func (cm *ConfigManager) GenerateToml(server *ServerConfig) string {
 	var b strings.Builder
@@ -246,6 +293,10 @@ func (cm *ConfigManager) GenerateToml(server *ServerConfig) string {
 
 	// Proxies
 	for _, p := range server.Proxies {
+		// Skip disabled proxies
+		if p.Enabled != nil && !*p.Enabled {
+			continue
+		}
 		b.WriteString("\n[[proxies]]\n")
 		b.WriteString(fmt.Sprintf("name = \"%s\"\n", p.Name))
 		b.WriteString(fmt.Sprintf("type = \"%s\"\n", p.Type))
