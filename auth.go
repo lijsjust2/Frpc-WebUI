@@ -182,14 +182,16 @@ func (am *AuthManager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("X-Auth-Token")
 		if token == "" {
-			// Also check cookie
 			if cookie, err := r.Cookie("auth_token"); err == nil {
 				token = cookie.Value
 			}
 		}
 
 		if !am.ValidateSession(token) {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			b, _ := json.Marshal(map[string]string{"error": "unauthorized"})
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write(b)
 			return
 		}
 

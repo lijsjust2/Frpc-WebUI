@@ -21,7 +21,6 @@ async function api(method, path, body = null, skipAuthRedirect = false) {
     }
     const res = await fetch(`/api${path}`, opts);
 
-    // Handle 401 - token expired, redirect to login
     if (res.status === 401) {
         authToken = '';
         localStorage.removeItem('authToken');
@@ -33,7 +32,15 @@ async function api(method, path, body = null, skipAuthRedirect = false) {
         throw new Error('unauthorized');
     }
 
-    const data = await res.json();
+    let data;
+    try {
+        data = await res.json();
+    } catch (e) {
+        if (!res.ok) {
+            throw new Error(`请求失败 (HTTP ${res.status})`);
+        }
+        throw new Error('服务器返回了无效的响应');
+    }
     if (!res.ok) {
         throw new Error(data.error || `HTTP ${res.status}`);
     }

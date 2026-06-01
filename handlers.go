@@ -19,8 +19,14 @@ func NewHandler(config *ConfigManager, process *ProcessManager, auth *AuthManage
 
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	b, err := json.Marshal(data)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"internal marshal error"}`))
+		return
+	}
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	w.Write(b)
 }
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
