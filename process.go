@@ -13,28 +13,78 @@ import (
 	"time"
 )
 
+const (
+	maxLogSize          = 10 * 1024 * 1024 // 10MB
+	healthCheckInterval = 30 * time.Second
+)
+
 type ProcessInfo struct {
-	ServerID string
-	Cmd      *exec.Cmd
-	LogFile  string
-	Running  bool
+	ServerID    string
+	Cmd         *exec.Cmd
+	LogFile     string
+	Running     bool
+	TomlContent string
+	Done        chan struct{} // closed when cmd.Wait() completes
 }
 
 type ProcessManager struct {
 	dataDir   string
+	configMgr *ConfigManager
 	processes map[string]*ProcessInfo
 	mu        sync.RWMutex
 }
 
-func NewProcessManager(dataDir string) *ProcessManager {
+func NewProcessManager(dataDir string, configMgr *ConfigManager) *ProcessManager {
 	logsDir := filepath.Join(dataDir, "logs")
 	os.MkdirAll(logsDir, 0755)
 	confDir := filepath.Join(dataDir, "conf")
 	os.MkdirAll(confDir, 0755)
 
-	return &ProcessManager{
+	pm := &ProcessManager{
 		dataDir:   dataDir,
+		configMgr: configMgr,
 		processes: make(map[string]*ProcessInfo),
+	}
+
+	// Start health check loop
+	go pm.healthCheckLoop()
+
+	return pm
+}
+
+func (pm *ProcessManager) healthCheckLoop() {
+	ticker := time.NewTicker(healthCheckInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		pm.checkAndRestartProcesses()
+	}
+}
+
+func (pm *ProcessManager) checkAndRestartProcesses() {
+	servers, err := pm.configMgr.Load()
+	if err != nil {
+		return
+	}
+
+	for _, server := range servers {
+		// Only auto-restart servers with autoStart enabled
+		if server.AutoStart != nil && !*server.AutoStart {
+			continue
+		}
+
+		pm.mu.RLock()
+		info, exists := pm.processes[server.ID]
+		wasRunning := exists && info.Running
+		pm.mu.RUnlock()
+
+		if exists && !wasRunning {
+			// Process was running but has exited, try to restart
+			toml := pm.configMgr.GenerateToml(&server)
+			log.Printf("Health check: restarting crashed server %s", server.Name)
+			if err := pm.Start(server.ID, toml); err != nil {
+				log.Printf("Health check: failed to restart server %s: %v", server.Name, err)
+			}
+		}
 	}
 }
 
@@ -55,6 +105,16 @@ func (pm *ProcessManager) confPath(serverID string) string {
 
 func (pm *ProcessManager) logPath(serverID string) string {
 	return filepath.Join(pm.dataDir, "logs", serverID+".log")
+}
+
+func (pm *ProcessManager) rotateLogIfNeeded(logFile string) {
+	info, err := os.Stat(logFile)
+	if err != nil || info.Size() < maxLogSize {
+		return
+	}
+	oldFile := logFile + ".old"
+	os.Remove(oldFile)
+	os.Rename(logFile, oldFile)
 }
 
 func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
@@ -78,8 +138,11 @@ func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
-	// Open log file with append mode to preserve history
+	// Rotate log if needed
 	logFile := pm.logPath(serverID)
+	pm.rotateLogIfNeeded(logFile)
+
+	// Open log file with append mode to preserve history
 	lf, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %v", err)
@@ -100,10 +163,12 @@ func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
 	}
 
 	info := &ProcessInfo{
-		ServerID: serverID,
-		Cmd:      cmd,
-		LogFile:  logFile,
-		Running:  true,
+		ServerID:    serverID,
+		Cmd:         cmd,
+		LogFile:     logFile,
+		Running:     true,
+		TomlContent: tomlContent,
+		Done:        make(chan struct{}),
 	}
 	pm.processes[serverID] = info
 
@@ -111,6 +176,7 @@ func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
 	go func() {
 		cmd.Wait()
 		lf.Close()
+		close(info.Done) // Signal that process has fully exited
 		pm.mu.Lock()
 		if p, ok := pm.processes[serverID]; ok && p.Cmd == cmd {
 			p.Running = false
@@ -129,55 +195,39 @@ func (pm *ProcessManager) Stop(serverID string) error {
 	info, ok := pm.processes[serverID]
 	if !ok || !info.Running {
 		pm.mu.Unlock()
-		return nil // Already stopped, not an error
+		return nil
 	}
 
-	if err := info.Cmd.Process.Kill(); err != nil {
-		pm.mu.Unlock()
+	cmd := info.Cmd
+	done := info.Done
+	info.Running = false
+	pm.mu.Unlock()
+
+	// Kill the process
+	if err := cmd.Process.Kill(); err != nil {
 		return fmt.Errorf("failed to stop frpc: %v", err)
 	}
 
-	info.Running = false
-	pm.mu.Unlock()
+	// Wait for the monitoring goroutine to finish cmd.Wait() and close the log file
+	select {
+	case <-done:
+		// Process cleaned up
+	case <-time.After(5 * time.Second):
+		log.Printf("warning: timeout waiting for frpc process %s to exit", serverID)
+	}
 
 	log.Printf("frpc stopped for server %s", serverID)
 	return nil
 }
 
 func (pm *ProcessManager) Restart(serverID string, tomlContent string) error {
-	pm.mu.Lock()
-	info, ok := pm.processes[serverID]
-	if !ok || !info.Running {
-		pm.mu.Unlock()
-		return fmt.Errorf("server %s is not running", serverID)
-	}
-	pm.mu.Unlock()
-
 	if err := pm.Stop(serverID); err != nil {
 		return err
 	}
 
-	// Wait for process to actually exit with timeout
-	timeout := time.After(5 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for process to stop")
-		case <-ticker.C:
-			pm.mu.RLock()
-			procInfo, exists := pm.processes[serverID]
-			pm.mu.RUnlock()
-			
-			if !exists || !procInfo.Running {
-				// Process has stopped, safe to restart
-				time.Sleep(500 * time.Millisecond) // Brief pause
-				return pm.Start(serverID, tomlContent)
-			}
-		}
-	}
+	// Wait briefly for process cleanup
+	time.Sleep(500 * time.Millisecond)
+	return pm.Start(serverID, tomlContent)
 }
 
 func (pm *ProcessManager) Status(serverID string) (bool, int) {
@@ -207,12 +257,12 @@ func (pm *ProcessManager) GetLogs(serverID string, lines int) (string, error) {
 	}
 
 	content := string(b)
-	
+
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	content = ansiRegex.ReplaceAllString(content, "")
 
 	content = strings.TrimSpace(content)
-	
+
 	if lines > 0 {
 		allLines := strings.Split(content, "\n")
 		if len(allLines) > lines {

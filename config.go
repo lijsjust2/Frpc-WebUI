@@ -48,7 +48,7 @@ type ProxyConfig struct {
 
 type ConfigManager struct {
 	dataDir string
-	mu      sync.RWMutex
+	mu      sync.Mutex
 }
 
 func NewConfigManager(dataDir string) *ConfigManager {
@@ -60,9 +60,13 @@ func (cm *ConfigManager) configFilePath() string {
 }
 
 func (cm *ConfigManager) Load() ([]ServerConfig, error) {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
 
+	return cm.loadLocked()
+}
+
+func (cm *ConfigManager) loadLocked() ([]ServerConfig, error) {
 	b, err := os.ReadFile(cm.configFilePath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -82,11 +86,20 @@ func (cm *ConfigManager) Save(servers []ServerConfig) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
+	return cm.saveLocked(servers);
+}
+
+func (cm *ConfigManager) saveLocked(servers []ServerConfig) error {
 	b, err := json.MarshalIndent(servers, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(cm.configFilePath(), b, 0644)
+	// Write to temp file first, then rename for atomicity
+	tmpFile := cm.configFilePath() + ".tmp"
+	if err := os.WriteFile(tmpFile, b, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpFile, cm.configFilePath())
 }
 
 func (cm *ConfigManager) GetServer(id string) (*ServerConfig, error) {

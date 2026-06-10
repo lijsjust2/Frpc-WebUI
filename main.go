@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 //go:embed static/*
@@ -49,7 +51,7 @@ func main() {
 
 	// Initialize managers
 	configMgr := NewConfigManager(dataDir)
-	processMgr := NewProcessManager(dataDir)
+	processMgr := NewProcessManager(dataDir, configMgr)
 	authMgr := NewAuthManager(dataDir)
 
 	// Create handler
@@ -66,7 +68,7 @@ func main() {
 
 	// Health check (no auth)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, 200, map[string]string{"status": "ok", "version": "v1.2.0"})
+		jsonResponse(w, 200, map[string]string{"status": "ok", "version": "v1.3.0"})
 	})
 
 	// Auth routes (no auth middleware)
@@ -75,6 +77,7 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", handler.AuthLogin)
 
 	// Protected API routes
+	mux.Handle("POST /api/auth/logout", authMgr.Middleware(http.HandlerFunc(handler.AuthLogout)))
 	mux.Handle("POST /api/auth/change-password", authMgr.Middleware(http.HandlerFunc(handler.AuthChangePassword)))
 	mux.Handle("GET /api/servers", authMgr.Middleware(http.HandlerFunc(handler.ListServers)))
 	mux.Handle("POST /api/servers", authMgr.Middleware(http.HandlerFunc(handler.CreateServer)))
@@ -121,6 +124,16 @@ func main() {
 			}
 		}
 	}
+
+	// Graceful shutdown
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Println("Shutting down gracefully...")
+		processMgr.StopAll()
+		os.Exit(0)
+	}()
 
 	log.Printf("frpc-webui starting on port %s", port)
 	log.Printf("Data directory: %s", dataDir)

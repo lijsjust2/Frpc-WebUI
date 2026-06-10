@@ -237,7 +237,12 @@ document.getElementById('password-form').addEventListener('submit', async (e) =>
 });
 
 // === Logout ===
-document.getElementById('btn-logout').addEventListener('click', () => {
+document.getElementById('btn-logout').addEventListener('click', async () => {
+    try {
+        await api('POST', '/auth/logout', null, true);
+    } catch (e) {
+        // Ignore errors on logout
+    }
     authToken = '';
     localStorage.removeItem('authToken');
     selectedServerId = null;

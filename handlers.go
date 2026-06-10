@@ -62,6 +62,28 @@ func validateLocalIP(ip string) bool {
 	return true
 }
 
+func setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // --- Auth ---
 
 func (h *Handler) AuthStatus(w http.ResponseWriter, r *http.Request) {
@@ -85,13 +107,7 @@ func (h *Handler) AuthSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := h.auth.CreateSession()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   86400,
-		HttpOnly: true,
-	})
+	setAuthCookie(w, token)
 	jsonResponse(w, 200, map[string]string{"token": token})
 }
 
@@ -110,14 +126,22 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := h.auth.CreateSession()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   86400,
-		HttpOnly: true,
-	})
+	setAuthCookie(w, token)
 	jsonResponse(w, 200, map[string]string{"token": token})
+}
+
+func (h *Handler) AuthLogout(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("X-Auth-Token")
+	if token == "" {
+		if cookie, err := r.Cookie("auth_token"); err == nil {
+			token = cookie.Value
+		}
+	}
+	if token != "" {
+		h.auth.DestroySession(token)
+	}
+	clearAuthCookie(w)
+	jsonResponse(w, 200, map[string]string{"status": "logged out"})
 }
 
 func (h *Handler) AuthChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +167,19 @@ func (h *Handler) AuthChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, 200, map[string]string{"status": "password changed"})
+	// Destroy current session to force re-login
+	token := r.Header.Get("X-Auth-Token")
+	if token == "" {
+		if cookie, err := r.Cookie("auth_token"); err == nil {
+			token = cookie.Value
+		}
+	}
+	if token != "" {
+		h.auth.DestroySession(token)
+	}
+	clearAuthCookie(w)
+
+	jsonResponse(w, 200, map[string]string{"status": "password changed, please re-login"})
 }
 
 // --- Servers ---

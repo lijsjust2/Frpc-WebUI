@@ -18,6 +18,11 @@ type AuthData struct {
 	Salt         string `json:"salt"`
 }
 
+type sessionEntry struct {
+	Token   string    `json:"token"`
+	Expiry  time.Time `json:"expiry"`
+}
+
 type AuthManager struct {
 	dataDir  string
 	sessions map[string]time.Time
@@ -25,14 +30,56 @@ type AuthManager struct {
 }
 
 func NewAuthManager(dataDir string) *AuthManager {
-	return &AuthManager{
+	am := &AuthManager{
 		dataDir:  dataDir,
 		sessions: make(map[string]time.Time),
 	}
+	am.loadSessions()
+	return am
 }
 
 func (am *AuthManager) authFilePath() string {
 	return filepath.Join(am.dataDir, "auth.json")
+}
+
+func (am *AuthManager) sessionsFilePath() string {
+	return filepath.Join(am.dataDir, "sessions.json")
+}
+
+func (am *AuthManager) loadSessions() {
+	b, err := os.ReadFile(am.sessionsFilePath())
+	if err != nil {
+		return
+	}
+	var entries []sessionEntry
+	if err := json.Unmarshal(b, &entries); err != nil {
+		return
+	}
+	now := time.Now()
+	for _, e := range entries {
+		if now.Before(e.Expiry) {
+			am.sessions[e.Token] = e.Expiry
+		}
+	}
+}
+
+func (am *AuthManager) saveSessions() {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	entries := make([]sessionEntry, 0, len(am.sessions))
+	now := time.Now()
+	for token, expiry := range am.sessions {
+		if now.Before(expiry) {
+			entries = append(entries, sessionEntry{Token: token, Expiry: expiry})
+		}
+	}
+
+	b, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(am.sessionsFilePath(), b, 0600)
 }
 
 func (am *AuthManager) IsSetup() bool {
@@ -142,14 +189,22 @@ func (am *AuthManager) CreateSession() string {
 	tokenStr := hex.EncodeToString(token)
 
 	am.mu.Lock()
-	defer am.mu.Unlock()
-	
-	// Clean expired sessions before adding new one
 	am.cleanExpiredSessions()
-	
 	am.sessions[tokenStr] = time.Now().Add(24 * time.Hour)
+	am.mu.Unlock()
 
+	am.saveSessions()
 	return tokenStr
+}
+
+func (am *AuthManager) DestroySession(token string) {
+	if token == "" {
+		return
+	}
+	am.mu.Lock()
+	delete(am.sessions, token)
+	am.mu.Unlock()
+	am.saveSessions()
 }
 
 func (am *AuthManager) cleanExpiredSessions() {
@@ -173,9 +228,24 @@ func (am *AuthManager) ValidateSession(token string) bool {
 		am.mu.Lock()
 		delete(am.sessions, token)
 		am.mu.Unlock()
+		am.saveSessions()
 		return false
 	}
 	return true
+}
+
+func (am *AuthManager) RefreshSession(token string) {
+	if token == "" {
+		return
+	}
+	am.mu.Lock()
+	if _, ok := am.sessions[token]; ok {
+		am.sessions[token] = time.Now().Add(24 * time.Hour)
+		am.mu.Unlock()
+		am.saveSessions()
+	} else {
+		am.mu.Unlock()
+	}
 }
 
 func (am *AuthManager) Middleware(next http.Handler) http.Handler {
@@ -194,6 +264,9 @@ func (am *AuthManager) Middleware(next http.Handler) http.Handler {
 			w.Write(b)
 			return
 		}
+
+		// Refresh session on each valid request
+		am.RefreshSession(token)
 
 		next.ServeHTTP(w, r)
 	})
