@@ -19,6 +19,10 @@ on:
 permissions:
   contents: write
 
+# 环境变量 - 修改这里为你的 Docker Hub 用户名
+env:
+  DOCKERHUB_USERNAME: lijsjust2
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,6 +35,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Get FRP version
         id: frp
@@ -58,36 +68,48 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION"
 
-      - name: Build AMD64 image
+      - name: Build and push AMD64 image
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64
-          push: false
+          push: true
           no-cache: true
           build-args: |
             FRP_VERSION=${{ steps.frp.outputs.version }}
-          tags: frpc-webui:amd64
-          outputs: type=docker,dest=/tmp/frpc-webui-amd64.tar
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-amd64
 
-      - name: Build ARM64 image
+      - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/arm64
-          push: false
+          push: true
           no-cache: true
           build-args: |
             FRP_VERSION=${{ steps.frp.outputs.version }}
-          tags: frpc-webui:arm64
-          outputs: type=docker,dest=/tmp/frpc-webui-arm64.tar
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-arm64
 
-      - name: Compress images
+      - name: Create and push multi-arch manifest
         run: |
-          gzip -9 /tmp/frpc-webui-amd64.tar
-          gzip -9 /tmp/frpc-webui-arm64.tar
-          echo "=== Image sizes ==="
-          ls -lh /tmp/frpc-webui-*.tar.gz
+          # 创建 manifest list，合并多架构镜像
+          docker buildx imagetools create -t ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }} \
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
+            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+          
+          # 如果是 latest 版本，也创建 latest tag
+          if [ "${{ steps.rel.outputs.version }}" = "latest" ]; then
+            docker buildx imagetools create -t ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:latest \
+              ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
+              ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+          fi
+          
+          echo "=== Pushed images ==="
+          docker buildx imagetools inspect ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -100,6 +122,14 @@ jobs:
 
             内置 frpc 版本: ${{ steps.frp.outputs.version }}
 
+            ### Docker Hub 镜像
+
+            镜像已推送到 Docker Hub: `lijsjust2/frpc-webui`
+
+            ```bash
+            docker pull lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
+            ```
+
             ### 支持架构
             - **AMD64** (x86_64) - 适用于普通 PC、服务器、云主机
             - **ARM64** (aarch64) - 适用于树莓派、ARM 服务器
@@ -107,11 +137,10 @@ jobs:
             ### 快速部署
 
             ```bash
-            # 1. 下载对应架构的镜像（以 AMD64 为例）
-            # 2. 加载镜像
-            docker load -i frpc-webui-amd64.tar.gz
+            # 拉取镜像（自动选择架构）
+            docker pull lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
 
-            # 3. 运行
+            # 运行容器
             docker run -d \
               --name frpc-webui \
               --network host \
@@ -119,14 +148,15 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              frpc-webui:amd64
+              lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
 
-            # 4. 访问 http://<IP>:7500
+            # 访问 http://<IP>:7500
             ```
 
-            ### ARM64 设备
+            ### 使用 latest 标签
+
             ```bash
-            docker load -i frpc-webui-arm64.tar.gz
+            docker pull lijsjust2/frpc-webui:latest
             docker run -d \
               --name frpc-webui \
               --network host \
@@ -134,10 +164,7 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              frpc-webui:arm64
+              lijsjust2/frpc-webui:latest
             ```
           draft: false
           prerelease: false
-          files: |
-            /tmp/frpc-webui-amd64.tar.gz
-            /tmp/frpc-webui-arm64.tar.gz
