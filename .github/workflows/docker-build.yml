@@ -19,10 +19,6 @@ on:
 permissions:
   contents: write
 
-# 环境变量 - 修改这里为你的 Docker Hub 用户名
-env:
-  DOCKERHUB_USERNAME: lijsfun
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -68,6 +64,10 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION"
 
+      - name: Set Docker Hub username
+        id: docker
+        run: echo "username=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_OUTPUT
+
       - name: Build and push AMD64 image
         uses: docker/build-push-action@v5
         with:
@@ -78,8 +78,8 @@ jobs:
           build-args: |
             FRP_VERSION=${{ steps.frp.outputs.version }}
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-amd64
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:amd64
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-amd64
 
       - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
@@ -91,25 +91,25 @@ jobs:
           build-args: |
             FRP_VERSION=${{ steps.frp.outputs.version }}
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-arm64
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}-arm64
 
       - name: Create and push multi-arch manifest
         run: |
           # 创建 manifest list，合并多架构镜像
-          docker buildx imagetools create -t ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }} \
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
-            ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+          docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }} \
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:arm64
           
           # 如果是 latest 版本，也创建 latest tag
           if [ "${{ steps.rel.outputs.version }}" = "latest" ]; then
-            docker buildx imagetools create -t ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:latest \
-              ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
-              ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:arm64
+            docker buildx imagetools create -t ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:latest \
+              ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:amd64 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:arm64
           fi
           
           echo "=== Pushed images ==="
-          docker buildx imagetools inspect ${{ env.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}
+          docker buildx imagetools inspect ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -124,10 +124,10 @@ jobs:
 
             ### Docker Hub 镜像
 
-            镜像已推送到 Docker Hub: `lijsfun/frpc-webui`
+            镜像已推送到 Docker Hub: `${{ steps.docker.outputs.username }}/frpc-webui`
 
             ```bash
-            docker pull lijsfun/frpc-webui:${{ steps.rel.outputs.version }}
+            docker pull ${{ steps.docker.outputs.username }}/frpc-webui:${{ steps.rel.outputs.version }}
             ```
 
             ### 支持架构
@@ -138,7 +138,7 @@ jobs:
 
             ```bash
             # 拉取镜像（自动选择架构）
-            docker pull lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
+            docker pull ${{ steps.docker.outputs.username }}/frpc-webui:${{ steps.rel.outputs.version }}
 
             # 运行容器
             docker run -d \
@@ -148,7 +148,7 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              lijsfun/frpc-webui:${{ steps.rel.outputs.version }}
+              ${{ steps.docker.outputs.username }}/frpc-webui:${{ steps.rel.outputs.version }}
 
             # 访问 http://<IP>:7500
             ```
@@ -156,7 +156,7 @@ jobs:
             ### 使用 latest 标签
 
             ```bash
-            docker pull lijsfun/frpc-webui:latest
+            docker pull ${{ steps.docker.outputs.username }}/frpc-webui:latest
             docker run -d \
               --name frpc-webui \
               --network host \
@@ -164,7 +164,7 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              lijsfun/frpc-webui:latest
+              ${{ steps.docker.outputs.username }}/frpc-webui:latest
             ```
           draft: false
           prerelease: false
