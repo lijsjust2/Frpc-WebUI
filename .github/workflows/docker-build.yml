@@ -21,7 +21,7 @@ permissions:
 
 # 环境变量 - 修改这里为你的 Docker Hub 用户名
 env:
-  DOCKERHUB_USERNAME: lijsjust2
+  DOCKERHUB_USERNAME: lijsfun
 
 jobs:
   build:
@@ -124,10 +124,10 @@ jobs:
 
             ### Docker Hub 镜像
 
-            镜像已推送到 Docker Hub: `lijsjust2/frpc-webui`
+            镜像已推送到 Docker Hub: `lijsfun/frpc-webui`
 
             ```bash
-            docker pull lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
+            docker pull lijsfun/frpc-webui:${{ steps.rel.outputs.version }}
             ```
 
             ### 支持架构
@@ -148,7 +148,7 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              lijsjust2/frpc-webui:${{ steps.rel.outputs.version }}
+              lijsfun/frpc-webui:${{ steps.rel.outputs.version }}
 
             # 访问 http://<IP>:7500
             ```
@@ -156,7 +156,7 @@ jobs:
             ### 使用 latest 标签
 
             ```bash
-            docker pull lijsjust2/frpc-webui:latest
+            docker pull lijsfun/frpc-webui:latest
             docker run -d \
               --name frpc-webui \
               --network host \
@@ -164,7 +164,7 @@ jobs:
               -e WEB_PORT=7500 \
               -e TZ=Asia/Shanghai \
               --restart unless-stopped \
-              lijsjust2/frpc-webui:latest
+              lijsfun/frpc-webui:latest
             ```
           draft: false
           prerelease: false
