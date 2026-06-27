@@ -1,0 +1,371 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+type ServerConfig struct {
+	ID         string        `json:"id"`
+	Name       string        `json:"name"`
+	ServerAddr string        `json:"serverAddr"`
+	ServerPort int           `json:"serverPort"`
+	AuthToken  string        `json:"authToken,omitempty"`
+	AuthMethod string        `json:"authMethod,omitempty"`
+	TLSEnable  bool          `json:"tlsEnable,omitempty"`
+	User       string        `json:"user,omitempty"`
+	AutoStart  *bool         `json:"autoStart"`
+	Proxies    []ProxyConfig `json:"proxies"`
+	CreatedAt  string        `json:"createdAt"`
+	UpdatedAt  string        `json:"updatedAt"`
+}
+
+type ProxyConfig struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"` // tcp, udp, http, https, stcp, p2p
+	LocalIP          string   `json:"localIP"`
+	LocalPort        int      `json:"localPort"`
+	RemotePort       int      `json:"remotePort,omitempty"`
+	CustomDomains    []string `json:"customDomains,omitempty"`
+	Subdomain        string   `json:"subdomain,omitempty"`
+	UseEncryption    bool     `json:"useEncryption,omitempty"`
+	UseCompression   bool     `json:"useCompression,omitempty"`
+	BandwidthLimit   string   `json:"bandwidthLimit,omitempty"`
+	BandwidthLimitMode string `json:"bandwidthLimitMode,omitempty"` // client or server
+	SecretKey        string   `json:"secretKey,omitempty"`          // for stcp
+	HTTPUser         string   `json:"httpUser,omitempty"`
+	HTTPPassword     string   `json:"httpPassword,omitempty"`
+	Remark           string   `json:"remark,omitempty"`
+	Enabled          *bool    `json:"enabled,omitempty"` // nil or true = enabled, false = disabled
+}
+
+type ConfigManager struct {
+	dataDir string
+	mu      sync.Mutex
+}
+
+func NewConfigManager(dataDir string) *ConfigManager {
+	return &ConfigManager{dataDir: dataDir}
+}
+
+func (cm *ConfigManager) configFilePath() string {
+	return filepath.Join(cm.dataDir, "servers.json")
+}
+
+func (cm *ConfigManager) Load() ([]ServerConfig, error) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	return cm.loadLocked()
+}
+
+func (cm *ConfigManager) loadLocked() ([]ServerConfig, error) {
+	b, err := os.ReadFile(cm.configFilePath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ServerConfig{}, nil
+		}
+		return nil, err
+	}
+
+	var servers []ServerConfig
+	if err := json.Unmarshal(b, &servers); err != nil {
+		return nil, err
+	}
+	return servers, nil
+}
+
+func (cm *ConfigManager) Save(servers []ServerConfig) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	return cm.saveLocked(servers);
+}
+
+func (cm *ConfigManager) saveLocked(servers []ServerConfig) error {
+	b, err := json.MarshalIndent(servers, "", "  ")
+	if err != nil {
+		return err
+	}
+	// Write to temp file first, then rename for atomicity
+	tmpFile := cm.configFilePath() + ".tmp"
+	if err := os.WriteFile(tmpFile, b, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpFile, cm.configFilePath())
+}
+
+func (cm *ConfigManager) GetServer(id string) (*ServerConfig, error) {
+	servers, err := cm.Load()
+	if err != nil {
+		return nil, err
+	}
+	for i := range servers {
+		if servers[i].ID == id {
+			return &servers[i], nil
+		}
+	}
+	return nil, fmt.Errorf("server not found: %s", id)
+}
+
+func (cm *ConfigManager) CreateServer(cfg ServerConfig) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	cfg.ID = generateID()
+	cfg.CreatedAt = time.Now().Format(time.RFC3339)
+	cfg.UpdatedAt = cfg.CreatedAt
+
+	// Default to auto-start
+	autoStart := true
+	cfg.AutoStart = &autoStart
+
+	if cfg.Proxies == nil {
+		cfg.Proxies = []ProxyConfig{}
+	}
+
+	servers = append(servers, cfg)
+	return cm.Save(servers)
+}
+
+func (cm *ConfigManager) UpdateServer(id string, cfg ServerConfig) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == id {
+			cfg.ID = id
+			cfg.CreatedAt = servers[i].CreatedAt
+			cfg.UpdatedAt = time.Now().Format(time.RFC3339)
+			cfg.Proxies = servers[i].Proxies
+			servers[i] = cfg
+			return cm.Save(servers)
+		}
+	}
+	return fmt.Errorf("server not found: %s", id)
+}
+
+func (cm *ConfigManager) DeleteServer(id string) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == id {
+			servers = append(servers[:i], servers[i+1:]...)
+			return cm.Save(servers)
+		}
+	}
+	return fmt.Errorf("server not found: %s", id)
+}
+
+func (cm *ConfigManager) AddProxy(serverID string, proxy ProxyConfig) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == serverID {
+			proxy.ID = generateID()
+			servers[i].Proxies = append(servers[i].Proxies, proxy)
+			servers[i].UpdatedAt = time.Now().Format(time.RFC3339)
+			return cm.Save(servers)
+		}
+	}
+	return fmt.Errorf("server not found: %s", serverID)
+}
+
+func (cm *ConfigManager) UpdateProxy(serverID, proxyID string, proxy ProxyConfig) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == serverID {
+			for j := range servers[i].Proxies {
+				if servers[i].Proxies[j].ID == proxyID {
+					proxy.ID = proxyID
+					servers[i].Proxies[j] = proxy
+					servers[i].UpdatedAt = time.Now().Format(time.RFC3339)
+					return cm.Save(servers)
+				}
+			}
+			return fmt.Errorf("proxy not found: %s", proxyID)
+		}
+	}
+	return fmt.Errorf("server not found: %s", serverID)
+}
+
+func (cm *ConfigManager) DeleteProxy(serverID, proxyID string) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == serverID {
+			for j := range servers[i].Proxies {
+				if servers[i].Proxies[j].ID == proxyID {
+					servers[i].Proxies = append(servers[i].Proxies[:j], servers[i].Proxies[j+1:]...)
+					servers[i].UpdatedAt = time.Now().Format(time.RFC3339)
+					return cm.Save(servers)
+				}
+			}
+			return fmt.Errorf("proxy not found: %s", proxyID)
+		}
+	}
+	return fmt.Errorf("server not found: %s", serverID)
+}
+
+func (cm *ConfigManager) ToggleProxy(serverID, proxyID string) error {
+	servers, err := cm.Load()
+	if err != nil {
+		return err
+	}
+
+	for i := range servers {
+		if servers[i].ID == serverID {
+			for j := range servers[i].Proxies {
+				if servers[i].Proxies[j].ID == proxyID {
+					if servers[i].Proxies[j].Enabled == nil || *servers[i].Proxies[j].Enabled {
+						servers[i].Proxies[j].Enabled = boolPtr(false)
+					} else {
+						servers[i].Proxies[j].Enabled = boolPtr(true)
+					}
+					servers[i].UpdatedAt = time.Now().Format(time.RFC3339)
+					return cm.Save(servers)
+				}
+			}
+			return fmt.Errorf("proxy not found: %s", proxyID)
+		}
+	}
+	return fmt.Errorf("server not found: %s", serverID)
+}
+
+func (cm *ConfigManager) ExportAll() ([]ServerConfig, error) {
+	return cm.Load()
+}
+
+func (cm *ConfigManager) ImportAll(servers []ServerConfig) error {
+	// Regenerate IDs to avoid conflicts
+	for i := range servers {
+		servers[i].ID = generateID()
+		servers[i].CreatedAt = time.Now().Format(time.RFC3339)
+		servers[i].UpdatedAt = servers[i].CreatedAt
+		for j := range servers[i].Proxies {
+			servers[i].Proxies[j].ID = generateID()
+		}
+	}
+	return cm.Save(servers)
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// GenerateToml generates frpc.toml content for a server
+func (cm *ConfigManager) GenerateToml(server *ServerConfig) string {
+	var b strings.Builder
+
+	b.WriteString("# Auto-generated by frpc-webui\n\n")
+
+	// Global config
+	b.WriteString(fmt.Sprintf("serverAddr = \"%s\"\n", server.ServerAddr))
+	b.WriteString(fmt.Sprintf("serverPort = %d\n", server.ServerPort))
+
+	if server.User != "" {
+		b.WriteString(fmt.Sprintf("user = \"%s\"\n", server.User))
+	}
+
+	if server.AuthToken != "" {
+		method := server.AuthMethod
+		if method == "" {
+			method = "token"
+		}
+		b.WriteString(fmt.Sprintf("\n[auth]\nmethod = \"%s\"\n", method))
+		b.WriteString(fmt.Sprintf("token = \"%s\"\n", server.AuthToken))
+	}
+
+	if server.TLSEnable {
+		b.WriteString("\n[transport.tls]\nenable = true\n")
+	}
+
+	// Proxies
+	for _, p := range server.Proxies {
+		// Skip disabled proxies
+		if p.Enabled != nil && !*p.Enabled {
+			continue
+		}
+		b.WriteString("\n[[proxies]]\n")
+		b.WriteString(fmt.Sprintf("name = \"%s\"\n", p.Name))
+		b.WriteString(fmt.Sprintf("type = \"%s\"\n", p.Type))
+		b.WriteString(fmt.Sprintf("localIP = \"%s\"\n", p.LocalIP))
+		b.WriteString(fmt.Sprintf("localPort = %d\n", p.LocalPort))
+
+		switch p.Type {
+		case "tcp", "udp":
+			if p.RemotePort > 0 {
+				b.WriteString(fmt.Sprintf("remotePort = %d\n", p.RemotePort))
+			}
+		case "http", "https":
+			if len(p.CustomDomains) > 0 {
+				domains := make([]string, len(p.CustomDomains))
+				for i, d := range p.CustomDomains {
+					domains[i] = fmt.Sprintf("\"%s\"", d)
+				}
+				b.WriteString(fmt.Sprintf("customDomains = [%s]\n", strings.Join(domains, ", ")))
+			}
+			if p.Subdomain != "" {
+				b.WriteString(fmt.Sprintf("subdomain = \"%s\"\n", p.Subdomain))
+			}
+			if p.HTTPUser != "" {
+				b.WriteString(fmt.Sprintf("httpUser = \"%s\"\n", p.HTTPUser))
+			}
+			if p.HTTPPassword != "" {
+				b.WriteString(fmt.Sprintf("httpPassword = \"%s\"\n", p.HTTPPassword))
+			}
+		case "stcp":
+			if p.SecretKey != "" {
+				b.WriteString(fmt.Sprintf("secretKey = \"%s\"\n", p.SecretKey))
+			}
+		}
+
+		// Common fields for all proxy types
+		if p.UseEncryption {
+			b.WriteString("transport.useEncryption = true\n")
+		}
+		if p.UseCompression {
+			b.WriteString("transport.useCompression = true\n")
+		}
+		if p.BandwidthLimit != "" {
+			mode := p.BandwidthLimitMode
+			if mode == "" {
+				mode = "client"
+			}
+			b.WriteString(fmt.Sprintf("transport.bandwidthLimit = \"%s\"\n", p.BandwidthLimit))
+			b.WriteString(fmt.Sprintf("transport.bandwidthLimitMode = \"%s\"\n", mode))
+		}
+	}
+
+	return b.String()
+}
+
+func generateID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}

@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frpc WebUI 管理器</title>
+    <meta name="description" content="FRP客户端(frpc)图形化配置管理工具">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Setup Page -->
+    <div id="setup-page" class="page hidden">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-logo">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                </div>
+                <h1>Frpc WebUI 管理器</h1>
+                <p class="auth-subtitle">首次使用，请设置管理员账号与密码</p>
+                <form id="setup-form">
+                    <div class="form-group">
+                        <label>管理员账号</label>
+                        <input type="text" id="setup-username" placeholder="请输入账号（至少 3 个字符）" required minlength="3" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label>管理密码</label>
+                        <input type="password" id="setup-password" placeholder="请输入管理密码（至少 6 位）" required minlength="6" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label>确认密码</label>
+                        <input type="password" id="setup-confirm" placeholder="请再次输入密码" required minlength="6" autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">设置并进入</button>
+                </form>
+                <div id="setup-error" class="error-msg hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Page -->
+    <div id="login-page" class="page hidden">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-logo">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="1.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                </div>
+                <h1>Frpc WebUI 管理器</h1>
+                <p class="auth-subtitle" id="login-subtitle">请输入账号与密码</p>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label>账号</label>
+                        <input type="text" id="login-username" placeholder="请输入账号" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input type="password" id="login-password" placeholder="请输入密码" required autocomplete="current-password">
+                    </div>
+                    <div id="login-code-group" class="form-group hidden">
+                        <label>验证码</label>
+                        <div class="code-row">
+                            <input type="text" id="login-code" placeholder="请输入 Bark 收到的验证码" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+                            <button type="button" class="btn btn-secondary" id="btn-send-code">获取验证码</button>
+                        </div>
+                        <small class="form-hint" id="code-hint">验证码将通过 Bark 推送至已绑定设备，有效期 5 分钟。</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">登录</button>
+                </form>
+                <div id="login-error" class="error-msg hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="main-page" class="page hidden">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <h1>Frpc WebUI 管理器</h1>
+            </div>
+            <div class="header-right">
+                 <div class="header-links">
+                    <a href="https://github.com/fatedier/frp" target="_blank" class="btn btn-sm btn-ghost"
+                        title="FRP 官方">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                        </svg>
+                    </a>
+                    <button class="btn btn-sm btn-ghost" id="btn-theme-toggle" title="切换主题">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" id="theme-icon">
+                            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="header-divider"></div>
+                <button class="btn btn-sm btn-ghost" id="btn-export-config" title="导出配置">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    导出
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btn-import-config" title="导入配置">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    导入
+                </button>
+                <input type="file" id="import-file-input" accept=".json" style="display:none">
+                <div class="header-divider"></div>
+                <button class="btn btn-sm btn-ghost" id="btn-bark-settings" title="Bark 验证设置">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 01-3.46 0"></path>
+                    </svg>
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btn-change-password" title="修改密码">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0110 0v4"></path>
+                    </svg>
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btn-logout" title="退出登录">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="app-body">
+            <!-- Sidebar: Server List -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>服务器列表</h2>
+                    <button class="btn btn-sm btn-primary" id="btn-add-server" title="添加服务器">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="3">
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="server-list" id="server-list">
+                    <div class="empty-state">
+                        <p>暂无服务器</p>
+                        <p class="text-muted">点击 + 添加第一个</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- No server selected -->
+                <div id="no-selection" class="empty-main">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+                        opacity="0.3">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    <p>选择左侧服务器查看配置</p>
+                </div>
+
+                <!-- Server Detail -->
+                <div id="server-detail" class="hidden">
+                    <!-- Server Config Section -->
+                    <section class="config-section">
+                        <div class="section-header">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <h2 id="server-detail-name">服务器配置</h2>
+                                <button class="btn btn-sm btn-ghost" id="btn-view-config" title="查看配置">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                    配置
+                                </button>
+                                <button class="btn btn-sm btn-ghost" id="btn-view-logs" title="运行日志">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                    </svg>
+                                    日志
+                                </button>
+                            </div>
+                            <div class="section-actions">
+                                <button class="btn btn-sm" id="btn-restart-server" title="重启">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                                    </svg>
+                                    重启
+                                </button>
+                                <button class="btn btn-sm" id="btn-toggle-server">
+                                    <span class="status-indicator" id="server-running-dot"></span>
+                                    <span id="btn-toggle-text">启动</span>
+                                </button>
+                                <button class="btn btn-sm btn-ghost" id="btn-edit-server" title="编辑">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                        <path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                </button>
+                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-delete-server" title="删除">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path
+                                            d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="config-grid" id="server-config-grid">
+                            <!-- Filled by JS -->
+                        </div>
+                    </section>
+
+                    <!-- Proxy List Section -->
+                    <section class="config-section">
+                        <div class="section-header">
+                            <h2>端口转发规则</h2>
+                            <button class="btn btn-sm btn-primary" id="btn-add-proxy">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="3">
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
+                                添加规则
+                            </button>
+                        </div>
+                        <div class="proxy-table-wrap">
+                            <table class="proxy-table" id="proxy-table">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-sort="name">代理名称 <span class="sort-icon"></span></th>
+                                        <th class="sortable" data-sort="type">类型 <span class="sort-icon"></span></th>
+                                        <th class="sortable" data-sort="localAddr">本地地址 <span class="sort-icon"></span></th>
+                                        <th class="sortable" data-sort="remote">远程端口/域名 <span class="sort-icon"></span></th>
+                                        <th class="sortable" data-sort="remark">备注 <span class="sort-icon"></span></th>
+                                        <th>状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="proxy-table-body">
+                                </tbody>
+                            </table>
+                            <div id="proxy-empty" class="empty-state hidden">
+                                <p>暂无端口转发规则</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Server Edit Modal -->
+    <div class="modal-overlay hidden" id="modal-server">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-server-title">添加服务器</h3>
+                <button class="btn-close" onclick="closeModal('modal-server')">&times;</button>
+            </div>
+            <form id="server-form">
+                <div class="form-group">
+                    <label>名称 <span class="required">*</span></label>
+                    <input type="text" id="sf-name" placeholder="如：我的VPS" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label>服务器地址 <span class="required">*</span></label>
+                        <input type="text" id="sf-addr" placeholder="如：frps.example.com" required>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>端口 <span class="required">*</span></label>
+                        <input type="number" id="sf-port" placeholder="7000" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>认证 Token</label>
+                    <input type="text" id="sf-token" placeholder="可选">
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label>用户名</label>
+                        <input type="text" id="sf-user" placeholder="可选">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sf-tls"> 启用 TLS
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('modal-server')">取消</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-server">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Proxy Edit Modal -->
+    <div class="modal-overlay hidden" id="modal-proxy">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-proxy-title">添加端口转发规则</h3>
+                <button class="btn-close" onclick="closeModal('modal-proxy')">&times;</button>
+            </div>
+            <form id="proxy-form">
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label>代理名称 <span class="required">*</span></label>
+                        <input type="text" id="pf-name" placeholder="如：ssh, web" required>
+                        <small class="form-hint">代理名称需在整个 frps（服务端）里全局唯一</small>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>类型 <span class="required">*</span></label>
+                        <select id="pf-type" required>
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                            <option value="http">HTTP</option>
+                            <option value="https">HTTPS</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label>本地 IP</label>
+                        <input type="text" id="pf-local-ip" value="127.0.0.1" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>本地端口 <span class="required">*</span></label>
+                        <input type="number" id="pf-local-port" placeholder="22" required>
+                    </div>
+                </div>
+                <!-- TCP/UDP fields -->
+                <div id="proxy-tcp-fields">
+                    <div class="form-group">
+                        <label>远程端口</label>
+                        <input type="number" id="pf-remote-port" placeholder="6022">
+                    </div>
+                </div>
+                <!-- HTTP/HTTPS fields -->
+                <div id="proxy-http-fields" class="hidden">
+                    <div class="form-group">
+                        <label>自定义域名</label>
+                        <input type="text" id="pf-domains" placeholder="多个域名用逗号分隔">
+                    </div>
+                    <div class="form-group">
+                        <label>子域名</label>
+                        <input type="text" id="pf-subdomain" placeholder="可选">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>HTTP 用户名</label>
+                            <input type="text" id="pf-http-user" placeholder="可选">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>HTTP 密码</label>
+                            <input type="password" id="pf-http-password" placeholder="可选">
+                        </div>
+                    </div>
+                </div>
+                <!-- Common advanced fields -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pf-encryption"> 启用加密传输
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pf-compression"> 启用压缩传输
+                    </label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label>带宽限制 (如: 1MB, 500KB)</label>
+                        <input type="text" id="pf-bandwidth" placeholder="留空表示不限制">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label>限制模式</label>
+                        <select id="pf-bandwidth-mode">
+                            <option value="client">客户端限制</option>
+                            <option value="server">服务端限制</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <input type="text" id="pf-remark" placeholder="可选，填写规则备注信息">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="pf-enabled" checked> 启用规则
+                    </label>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('modal-proxy')">取消</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-proxy">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Config View Modal -->
+    <div class="modal-overlay hidden" id="modal-config">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>frpc 配置文件</h3>
+                <button class="btn-close" onclick="closeModal('modal-config')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="log-viewer" id="config-viewer" style="max-height: 500px;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modal-config')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div class="modal-overlay hidden" id="modal-logs">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3>运行日志</h3>
+                <div class="section-actions" style="margin-left: auto; margin-right: 8px;">
+                    <button class="btn btn-sm btn-ghost" id="btn-refresh-logs">刷新</button>
+                    <button class="btn btn-sm btn-ghost" id="btn-clear-logs">清空</button>
+                </div>
+                <button class="btn-close" onclick="closeModal('modal-logs')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="log-viewer" id="log-viewer" style="max-height: 500px;">暂无日志</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modal-logs')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Credentials Modal -->
+    <div class="modal-overlay hidden" id="modal-password">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>修改账号密码</h3>
+                <button class="btn-close" onclick="closeModal('modal-password')">&times;</button>
+            </div>
+            <form id="password-form">
+                <p class="form-hint" style="margin-bottom:16px;">可单独修改账号或密码，留空的字段保持不变。</p>
+                <div class="form-group">
+                    <label>当前密码</label>
+                    <input type="password" id="old-password" placeholder="请输入当前密码" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label>新账号（留空则不修改）</label>
+                    <input type="text" id="new-username" placeholder="至少 3 个字符" minlength="3" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>新密码（留空则不修改）</label>
+                    <input type="password" id="new-password" placeholder="至少 6 位" minlength="6" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>确认新密码</label>
+                    <input type="password" id="confirm-password" placeholder="请再次输入新密码" minlength="6" autocomplete="new-password">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('modal-password')">取消</button>
+                    <button type="submit" class="btn btn-primary">确认修改</button>
+                </div>
+            </form>
+            <div id="password-error" class="error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Bark Settings Modal -->
+    <div class="modal-overlay hidden" id="modal-bark">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Bark 二次验证</h3>
+                <button class="btn-close" onclick="closeModal('modal-bark')">&times;</button>
+            </div>
+            <form id="bark-form">
+                <p class="form-hint" style="margin-bottom:16px;">
+                    配置 Bark 推送服务后，可开启二次验证。开启后每次登录都需要先获取 Bark 推送的验证码并输入。
+                </p>
+                <div class="form-group switch-row">
+                    <div>
+                        <div class="switch-label">启用二次验证</div>
+                        <div class="switch-desc">开启后登录需输入 Bark 推送的验证码</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="bark-enabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Bark 服务地址</label>
+                    <input type="text" id="bark-server-url" placeholder="如：https://api.day.app">
+                </div>
+                <div class="form-group">
+                    <label>Device Token</label>
+                    <input type="text" id="bark-device-token" placeholder="留空表示不修改">
+                </div>
+                <div id="bark-status-info" class="form-hint" style="margin-top:8px;"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" id="btn-bark-test" style="margin-right:auto;">测试推送</button>
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('modal-bark')">取消</button>
+                    <button type="submit" class="btn btn-primary">保存配置</button>
+                </div>
+            </form>
+            <div id="bark-error" class="error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal-overlay hidden" id="modal-confirm">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 id="confirm-title">确认</h3>
+                <button class="btn-close" onclick="closeModal('modal-confirm')">&times;</button>
+            </div>
+            <p id="confirm-message" class="confirm-message"></p>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">取消</button>
+                <button class="btn btn-danger" id="btn-confirm-ok">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,147 @@
+name: Build and Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: '构建版本号（如 latest 或 1.0.0）'
+        required: false
+        default: 'latest'
+        type: string
+      create_release:
+        description: '同时创建 GitHub Release（需要填写版本号）'
+        required: false
+        default: false
+        type: boolean
+      push_to_dockerhub:
+        description: '是否推送到 Docker Hub（需要配置 DOCKERHUB_USERNAME 和 DOCKERHUB_TOKEN secrets）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Login to Docker Hub
+        if: github.event.inputs.push_to_dockerhub == 'true' || github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get FRP version
+        id: frp
+        run: |
+          FRP_VERSION=$(curl -sL https://api.github.com/repos/fatedier/frp/releases/latest | jq -r '.tag_name')
+          if [ -z "$FRP_VERSION" ] || [ "$FRP_VERSION" = "null" ]; then
+            echo "ERROR: Failed to determine frp version"
+            exit 1
+          fi
+          echo "version=$FRP_VERSION" >> $GITHUB_OUTPUT
+          echo "Using frp version: $FRP_VERSION"
+
+      - name: Determine release version
+        id: rel
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ inputs.build_version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Build and push multi-arch Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event.inputs.push_to_dockerhub == 'true' || github.event_name == 'push' }}
+          no-cache: true
+          build-args: |
+            FRP_VERSION=${{ steps.frp.outputs.version }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Inspect multi-arch image
+        if: github.event.inputs.push_to_dockerhub == 'true' || github.event_name == 'push'
+        run: |
+          echo "=== Multi-arch image inspection ==="
+          docker buildx imagetools inspect ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:${{ steps.rel.outputs.version }}
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.rel.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "v${{ steps.rel.outputs.version }}"
+          body: |
+            ## Frpc WebUI v${{ steps.rel.outputs.version }}
+
+            内置 frpc 版本: ${{ steps.frp.outputs.version }}
+
+            ### Docker Hub 镜像
+
+            ```bash
+            # 自动适配架构（推荐）
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:latest
+            ```
+
+            ### 支持架构
+            - **AMD64** (x86_64) - 适用于普通 PC、服务器、云主机
+            - **ARM64** (aarch64) - 适用于树莓派、ARM 服务器
+
+            ### 快速部署
+
+            ```bash
+            # 拉取镜像（自动选择架构）
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:latest
+
+            # 运行容器
+            docker run -d \
+              --name frpc-webui \
+              --network host \
+              -v ./data:/app/data \
+              -e WEB_PORT=7500 \
+              -e TZ=Asia/Shanghai \
+              --restart unless-stopped \
+              ${{ secrets.DOCKERHUB_USERNAME }}/frpc-webui:latest
+
+            # 访问 http://<IP>:7500
+            ```
+          draft: false
+          prerelease: false
