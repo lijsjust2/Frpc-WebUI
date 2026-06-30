@@ -577,7 +577,7 @@ func generateCode() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	n = uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
-	return fmt.Sprintf("%06d", n%1000000)
+	return fmt.Sprintf("%04d", n%10000)
 }
 
 // rateLimitError 表示受冷却限制的错误
@@ -658,15 +658,15 @@ func pushBarkCode(cfg *BarkConfig, code, username, location string) error {
 	}
 
 	body := fmt.Sprintf(
-		"———— 登录提醒 ————\nFRPC-WebUI提醒你：\n来自：【%s】\n用户 ***%s*** 正在执行登录操作\n验证码为：<code>%s</code>\n验证码有效期 5 分钟，请尽快认证",
-		location, username, code,
+		"【%s】登录验证码，有效期 5 分钟，请尽快认证\n【%s】正在登录Frpc-WebUI",
+		code, location,
 	)
 
 	payload := map[string]interface{}{
 		"device_key": cfg.DeviceToken,
-		"title":      "FRPC-WebUI 登录提醒",
+		"title":      "Frpc-WebUI 登录提醒",
 		"body":       body,
-		"group":      "FRPC-WebUI",
+		"group":      "Frpc-WebUI",
 	}
 	b, _ := json.Marshal(payload)
 
