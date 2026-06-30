@@ -433,15 +433,22 @@ document.getElementById('bark-enabled').addEventListener('change', async functio
     errorEl.classList.add('hidden');
     const enabled = this.checked;
     try {
+        if (enabled) {
+            const serverUrl = document.getElementById('bark-server-url').value.trim();
+            const deviceToken = document.getElementById('bark-device-token').value.trim();
+            if (deviceToken) {
+                await api('POST', '/auth/bark', { serverUrl, deviceToken });
+            } else if (serverUrl) {
+                await api('POST', '/auth/bark', { serverUrl });
+            }
+        }
         await api('POST', '/auth/bark/enabled', { enabled });
         toast(`二次验证已${enabled ? '启用' : '关闭'}`, 'success');
-        // 同步更新登录页状态
         try {
             const status = await api('GET', '/auth/status');
             updateLoginBarkUI(status.barkEnabled);
         } catch (_) {}
     } catch (e) {
-        // 切换失败，恢复开关状态
         this.checked = !enabled;
         errorEl.textContent = e.message;
         errorEl.classList.remove('hidden');
