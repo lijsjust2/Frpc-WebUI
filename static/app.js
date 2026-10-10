@@ -7,6 +7,11 @@ let editingProxyId = null;
 let proxySortColumn = '';
 let proxySortDirection = 'asc';
 
+// === Utilities: small helpers used across the app ===
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // === API Helper ===
 async function api(method, path, body = null, options = {}) {
     const { skipAuthRedirect = false, noRefresh = false } = options;
@@ -23,7 +28,8 @@ async function api(method, path, body = null, options = {}) {
     if (body) {
         opts.body = JSON.stringify(body);
     }
-    const res = await fetch(`/api${path}`, opts);
+    const url = `/api${path}`;
+    const res = await fetch(url, opts);
 
     if (res.status === 401) {
         let errorMsg = 'unauthorized';
@@ -48,22 +54,59 @@ async function api(method, path, body = null, options = {}) {
         throw err;
     }
 
-    let data;
+    // 先取原始文本再解析：响应体不是 JSON 时（例如 frps/反代返回的纯文本 404 页面）
+    // 不能把它丢掉，否则错误提示里只剩一个无法定位的状态码。
+    let raw = '';
     try {
-        data = await res.json();
+        raw = await res.text();
     } catch (e) {
-        if (!res.ok) {
-            throw new Error(`请求失败 (HTTP ${res.status})`);
-        }
-        throw new Error('服务器返回了无效的响应');
+        raw = '';
     }
+
+    let data = null;
+    let parseOk = false;
+    if (raw !== '') {
+        try {
+            data = JSON.parse(raw);
+            parseOk = true;
+        } catch (e) {
+            data = null;
+        }
+    }
+
+    const errUrl = `${method} ${url}`;
+    const snippet = (raw || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+
     if (!res.ok) {
-        const err = new Error(data.error || `HTTP ${res.status}`);
+        const msg = data && data.error
+            ? data.error
+            : `请求失败 (HTTP ${res.status})${snippet ? ' · ' + snippet : ''}`;
+        const err = new Error(msg);
         err.status = res.status;
         err.data = data;
+        err.raw = raw;
+        err.url = errUrl;
+        console.warn('[api] 请求失败', { url: errUrl, status: res.status, body: raw.slice(0, 500) });
+        throw err;
+    }
+
+    if (!parseOk) {
+        const err = new Error('服务器返回了无效的响应');
+        err.status = res.status;
+        err.raw = raw;
+        err.url = errUrl;
+        console.warn('[api] 响应不是合法 JSON', { url: errUrl, body: raw.slice(0, 500) });
         throw err;
     }
     return data;
+}
+
+// describeError 把请求附带的定位信息拼进提示文案，便于排查。
+function describeError(e) {
+    if (!e) return '未知错误';
+    let msg = e.message || '未知错误';
+    if (e.url) msg += ` [${e.url}]`;
+    return msg;
 }
 
 // === Toast ===
@@ -74,6 +117,7 @@ function toast(msg, type = 'info') {
     el.textContent = msg;
     container.appendChild(el);
     setTimeout(() => el.remove(), 3000);
+    return el;
 }
 
 // === Loading State ===
@@ -728,7 +772,7 @@ async function toggleProxy(proxyId) {
         renderServerDetail();
         tryAutoRestart();
     } catch (e) {
-        toast(e.message, 'error');
+        toast(describeError(e), 'error');
     }
 }
 
@@ -769,7 +813,7 @@ document.getElementById('server-form').addEventListener('submit', async (e) => {
     try {
         if (editingServerId) {
             await api('PUT', `/servers/${editingServerId}`, data);
-            toast('服务器已更新，正在重启...', 'success');
+            toast('服务器已更新', 'success');
         } else {
             await api('POST', '/servers', data);
             toast('服务器已添加', 'success');
@@ -781,7 +825,7 @@ document.getElementById('server-form').addEventListener('submit', async (e) => {
             tryAutoRestart();
         }
     } catch (e) {
-        toast(e.message, 'error');
+        toast(describeError(e), 'error');
     }
 });
 
@@ -850,23 +894,93 @@ document.getElementById('btn-restart-server').addEventListener('click', async ()
     }
 });
 
+// autoRestartInFlight 防止多个入口（保存/删除/启停/编辑服务器）重复触发重启；
+// 期间若有新的变更请求，记录为 pending，等当前一轮结束后补跑，确保最新配置一定被应用。
+let autoRestartInFlight = false;
+let autoRestartPending = false;
+
+// isRestarted 判断进程是否确实重新拉起过。
+// 优先比较 startedAt（最可靠）；旧值缺失时回退比较 pid。
+// 对「原本未运行」的场景，只要复核到 running=true 且有 pid 即视为已启动。
+function isRestarted(before, status) {
+    if (!status || !status.running) return false;
+    const prevPid = (before && before.pid) || 0;
+    if (before && before.startedAt && status.startedAt) {
+        return status.startedAt !== before.startedAt;
+    }
+    if (!prevPid) return !!status.pid;
+    return !!status.pid && status.pid !== prevPid;
+}
+
+// waitForRestart 轮询确认 frpc 是否完成重启。
+// 面板若通过本 frpc 暴露，重启会短暂掐断隧道，此时重启请求的响应必然丢失，
+// 因此「请求失败」不等于「重启失败」，必须以事后状态复核为准。
+async function waitForRestart(serverId, before) {
+    // 累计约 1.5s / 3s / 5s / 7.5s；远小于 30s 健康检查周期，
+    // 避免把「健康检查自行拉起」误判成本次重启成功。
+    const delays = [1500, 1500, 2000, 2500];
+    for (const delay of delays) {
+        await sleep(delay);
+        try {
+            // 后台等待，不续期会话；隧道未恢复时静默重试
+            const status = await api('GET', `/servers/${serverId}/status`, null, { noRefresh: true });
+            if (isRestarted(before, status)) return true;
+        } catch (e) {
+            // 重启期间服务可能短暂不可达，继续等待下一轮
+        }
+    }
+    return false;
+}
+
 async function tryAutoRestart() {
     if (!selectedServerId) return;
     const server = servers.find(s => s.id === selectedServerId);
     if (!server) return;
+    if (autoRestartInFlight) {
+        autoRestartPending = true;
+        return;
+    }
+
+    autoRestartInFlight = true;
+
+    const serverId = selectedServerId;
+    const action = server.running ? '重启' : '启动';
+    const before = { pid: server.pid || 0, startedAt: server.startedAt || '' };
 
     try {
-        if (server.running) {
-            await api('POST', `/servers/${selectedServerId}/restart`);
-            toast('规则已更新，自动重启成功', 'success');
-        } else {
-            await api('POST', `/servers/${selectedServerId}/start`);
-            toast('规则已更新，自动启动成功', 'success');
+        let actionErr = null;
+        try {
+            if (server.running) {
+                await api('POST', `/servers/${serverId}/restart`);
+            } else {
+                await api('POST', `/servers/${serverId}/start`);
+            }
+        } catch (e) {
+            // 响应丢失（面板自断隧道）属正常现象，先不报错，交由下面的复核判定
+            actionErr = e;
         }
+
+        const waitingToast = toast('正在等待服务重新上线…', 'info');
+        const restarted = await waitForRestart(serverId, before);
+        if (waitingToast) waitingToast.remove();
+
         await loadServers();
         renderServerDetail();
-    } catch (e) {
-        toast('操作失败: ' + e.message, 'error');
+
+        if (restarted) {
+            toast(`配置已保存，服务已${action}`, 'success');
+        } else {
+            const detail = actionErr
+                ? `：${describeError(actionErr)}`
+                : '：服务未在预期时间内重新上线';
+            toast(`配置已保存，但自动${action}失败${detail}，请手动点击「重启」`, 'error');
+        }
+    } finally {
+        autoRestartInFlight = false;
+        if (autoRestartPending) {
+            autoRestartPending = false;
+            tryAutoRestart();
+        }
     }
 }
 
@@ -934,12 +1048,12 @@ async function deleteProxy(proxyId) {
     if (!confirm('确定删除此规则吗？')) return;
     try {
         await api('DELETE', `/servers/${selectedServerId}/proxies/${proxyId}`);
-        toast('规则已删除，正在重启...', 'success');
+        toast('规则已删除', 'success');
         await loadServers();
         renderServerDetail();
         tryAutoRestart();
     } catch (e) {
-        toast(e.message, 'error');
+        toast(describeError(e), 'error');
     }
 }
 
@@ -1000,17 +1114,17 @@ document.getElementById('proxy-form').addEventListener('submit', async (e) => {
     try {
         if (editingProxyId) {
             await api('PUT', `/servers/${selectedServerId}/proxies/${editingProxyId}`, data);
-            toast('规则已更新，正在重启...', 'success');
+            toast('规则已更新', 'success');
         } else {
             await api('POST', `/servers/${selectedServerId}/proxies`, data);
-            toast('规则已添加，正在重启...', 'success');
+            toast('规则已添加', 'success');
         }
         closeModal('modal-proxy');
         await loadServers();
         renderServerDetail();
         tryAutoRestart();
     } catch (e) {
-        toast('保存失败: ' + e.message, 'error');
+        toast('保存失败: ' + describeError(e), 'error');
     } finally {
         setButtonLoading(btnId, false);
     }

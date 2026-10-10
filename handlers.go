@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Handler struct {
@@ -366,14 +367,20 @@ func (h *Handler) ListServers(w http.ResponseWriter, r *http.Request) {
 	// Attach running status
 	type ServerWithStatus struct {
 		ServerConfig
-		Running bool `json:"running"`
-		PID     int  `json:"pid"`
+		Running   bool   `json:"running"`
+		PID       int    `json:"pid"`
+		StartedAt string `json:"startedAt"` // RFC3339Nano；进程未启动过返回空字符串
 	}
 
 	result := make([]ServerWithStatus, len(servers))
 	for i, s := range servers {
-		running, pid := h.process.Status(s.ID)
-		result[i] = ServerWithStatus{ServerConfig: s, Running: running, PID: pid}
+		running, pid, startedAt := h.process.Status(s.ID)
+		result[i] = ServerWithStatus{
+			ServerConfig: s,
+			Running:      running,
+			PID:          pid,
+			StartedAt:    formatStartedAt(startedAt),
+		}
 	}
 
 	jsonResponse(w, 200, result)
@@ -612,11 +619,20 @@ func (h *Handler) RestartServer(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	running, pid := h.process.Status(id)
+	running, pid, startedAt := h.process.Status(id)
 	jsonResponse(w, 200, map[string]interface{}{
-		"running": running,
-		"pid":     pid,
+		"running":   running,
+		"pid":       pid,
+		"startedAt": formatStartedAt(startedAt),
 	})
+}
+
+// formatStartedAt 把进程启动时刻格式化为 RFC3339Nano，零值返回空字符串。
+func formatStartedAt(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339Nano)
 }
 
 func (h *Handler) ServerLogs(w http.ResponseWriter, r *http.Request) {

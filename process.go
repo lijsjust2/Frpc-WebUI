@@ -24,6 +24,7 @@ type ProcessInfo struct {
 	LogFile     string
 	Running     bool
 	TomlContent string
+	StartedAt   time.Time     // 本次进程启动时刻，用于外部判断重启是否真正发生
 	Done        chan struct{} // closed when cmd.Wait() completes
 }
 
@@ -168,6 +169,7 @@ func (pm *ProcessManager) Start(serverID string, tomlContent string) error {
 		LogFile:     logFile,
 		Running:     true,
 		TomlContent: tomlContent,
+		StartedAt:   time.Now(),
 		Done:        make(chan struct{}),
 	}
 	pm.processes[serverID] = info
@@ -230,20 +232,21 @@ func (pm *ProcessManager) Restart(serverID string, tomlContent string) error {
 	return pm.Start(serverID, tomlContent)
 }
 
-func (pm *ProcessManager) Status(serverID string) (bool, int) {
+// Status 返回进程是否在运行、PID 以及本次启动时刻（未启动过则返回零值）。
+func (pm *ProcessManager) Status(serverID string) (bool, int, time.Time) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
 	info, ok := pm.processes[serverID]
 	if !ok {
-		return false, 0
+		return false, 0, time.Time{}
 	}
 
 	pid := 0
 	if info.Cmd != nil && info.Cmd.Process != nil {
 		pid = info.Cmd.Process.Pid
 	}
-	return info.Running, pid
+	return info.Running, pid, info.StartedAt
 }
 
 func (pm *ProcessManager) GetLogs(serverID string, lines int) (string, error) {
